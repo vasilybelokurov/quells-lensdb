@@ -16,3 +16,9 @@ notes/build.log
 data/raw/dwarfs/Rotmod_LTG.zip
 # OM10 mock catalogue: no longer used by any script
 data/raw/om10/
+# MaNGA DynPop inputs (fetch_manga.sh) and the 95 MB per-galaxy profile file;
+# the small derived histograms are kept
+data/raw/manga/*
+!data/raw/manga/manga_sep_hist.npy
+!data/raw/manga/manga_delay_hist.npz
+!data/raw/manga/manga_delay_hist_types.npz

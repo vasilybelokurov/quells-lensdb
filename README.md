@@ -17,6 +17,14 @@ and time delays both respond to the inner density slope.
     .venv/bin/python build_db.py            # known lenses -> data/lensed_quasars.csv
     .venv/bin/python compare_separations.py # main figure: plots/separations_compare.png
 
+MaNGA DynPop population (galaxies of all types with their measured JAM mass profiles):
+
+    ./fetch_manga.sh                                  # ~280 MB of inputs -> data/raw/manga/
+    .venv/bin/python manga_population.py              # per-galaxy mass profiles
+    .venv/bin/python manga_lenses.py                  # plots/separations_manga.png
+    .venv/bin/python manga_combined.py                # separations + delays, 3 panels
+    .venv/bin/python plot_manga_fractions_delays.py   # galaxy-type fractions vs separation and delay
+
 Every script writes PNGs to `plots/` and prints the numbers quoted in the note.
 
 ## Scripts
@@ -31,6 +39,10 @@ Every script writes PNGs to `plots/` and prints the numbers quoted in the note.
 | `slope_test.py` | sensitivity of the sub-0.5" abundance to the inner total-density slope |
 | `delays.py` | joint separation / time-delay distribution from the Fermat potential |
 | `combine_figs.py` | three-panel figure combining separations and delays |
+| `manga_population.py` | MaNGA DynPop (JAM + MGE) mass profiles, volume-weighted to the GAMA mass function, abundance-matched outer haloes |
+| `manga_lenses.py` | separation distribution of the MaNGA population, split by sigma_e and Sersic n |
+| `manga_combined.py` | MaNGA separations, separation vs delay, and delays of sub-arcsecond lenses |
+| `plot_manga_fractions.py`, `plot_manga_fractions_delays.py` | share of each galaxy type at fixed separation and at fixed delay |
 | `obs_lenses.py` | loaders for SLACS, SL2S, Read+19 dwarfs and SPARC |
 | `bh_test.py` | effect of central black holes on disc lenses |
 | `predict_sep.py`, `plot_contributions.py`, `plot_observables.py`, `plot_halo_models.py`, `plot_obs_comparison.py` | earlier exploratory figures (SIS shapes, halo-model diagnostics) |
