@@ -64,10 +64,11 @@ $`10^{-3.5}`$ and $`10^{3.7}`$ kpc.
 **(1)** Projection. The projected mass inside $`R`$ is a sum over spherical shells,
 
 ```math
-M_{\rm 2D}(<R)=\sum_{\rm shells}\Delta M(r)\,f(R,r),\qquad
-f=\begin{cases}1, & r\le R\\ 1-\sqrt{1-R^2/r^2}, & r>R,\end{cases}
+M_{\rm 2D}(<R)=\sum_{\rm shells}\Delta M(r)\,f(R,r),
 ```
 
+where a shell entirely inside the cylinder counts fully, $`f=1`$ for $`r\le R`$, and a
+shell outside contributes the fraction $`f=1-\sqrt{1-R^2/r^2}`$ for $`r>R`$; the sum is
 evaluated on 500 projected radii between $`10^{-3.3}`$ and $`10^{2.3}`$ kpc.
 
 **(2)** Convergence. With $`\Sigma_{\rm crit}=\frac{c^2}{4\pi G}\frac{D_s}{D_lD_{ls}}`$, the
