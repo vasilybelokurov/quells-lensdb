@@ -64,7 +64,7 @@ $`10^{-3.5}`$ and $`10^{3.7}`$ kpc.
 **(1)** Projection. The projected mass inside $`R`$ is a sum over spherical shells,
 
 ```math
-M_{\rm 2D}(<R)=\sum_{\rm shells}\Delta M(r)\,f(R,r),
+M_{\rm 2D}(\lt R)=\sum_{\rm shells}\Delta M(r)\,f(R,r),
 ```
 
 where a shell entirely inside the cylinder counts fully, $`f=1`$ for $`r\le R`$, and a
