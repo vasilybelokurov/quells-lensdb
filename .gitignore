@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+# LaTeX build products
+notes/*.aux
+notes/*.fdb_latexmk
+notes/*.fls
+notes/*.log
+notes/*.out
+notes/*.bbl
+notes/*.blg
+notes/build.log
+
+# duplicate of data/raw/dwarfs/rotmod/
+data/raw/dwarfs/Rotmod_LTG.zip
+# OM10 mock catalogue: no longer used by any script
+data/raw/om10/

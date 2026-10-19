@@ -1,0 +1,207 @@
+J/ApJ/777/97       SL2S galaxy-scale lens sample. III.       (Sonnenfeld+, 2013)
+================================================================================
+The SL2S galaxy-scale lens sample.
+III. Lens models, surface photometry, and stellar masses for the final sample.
+    Sonnenfeld A., Gavazzi R., Suyu S.H., Treu T., Marshall P.J.
+   <Astrophys. J., 777, 97 (2013)>
+   =2013ApJ...777...97S
+================================================================================
+ADC_Keywords: Gravitational lensing ; Redshifts ; Galaxies, IR ;
+              Photometry, HST; Photometry, ugriz
+Keywords: galaxies: elliptical and lenticular, cD; gravitational lensing: strong
+
+Abstract:
+    We present Hubble Space Telescope (HST) imaging data and
+    Canada-France-Hawaii Telescope (CFHT) near-infrared ground-based
+    images for the final sample of 56 candidate galaxy-scale lenses
+    uncovered in the CFHT Legacy Survey as part of the Strong Lensing in
+    the Legacy Survey (SL2S) project. The new images are used to perform
+    lens modeling, measure surface photometry, and estimate stellar masses
+    of the deflector early-type galaxies (ETGs). Lens modeling is
+    performed on the HST images (or CFHT when HST is not available) by
+    fitting the spatially extended light distribution of the lensed
+    features assuming a singular isothermal ellipsoid mass profile and by
+    reconstructing the intrinsic source light distribution on a pixelized
+    grid. Based on the analysis of systematic uncertainties and comparison
+    with inference based on different methods, we estimate that our
+    Einstein radii are accurate to ~3%. HST imaging provides a much higher
+    success rate in confirming gravitational lenses and measuring their
+    Einstein radii than CFHT imaging does. Lens modeling with ground-based
+    images, however, when successful, yields Einstein radius measurements
+    that are competitive with space-based images. Information from the
+    lens models is used together with spectroscopic information from
+    companion Paper IV (2013ApJ...777...98S) to classify the systems,
+    resulting in a final sample of 39 confirmed (grade A) lenses and 17
+    promising candidates (grade B,C).
+
+Description:
+    The galaxy-scale Strong Lensing Legacy Survey (SL2S) lenses are found
+    with a procedure described in detail in Paper I (Gavazzi et al.
+    2012ApJ...761..170G). All the SL2S lens candidates are first imaged by
+    the CFHT as part of the Canada-France-Hawaii Telescope Legacy Survey
+    (CFHTLS). The typical FWHM in the g and i bands is 0.7".
+
+    The WIRCam mounted on the CFHT was used to obtain NIR follow-up
+    photometry for some of the SL2S lens galaxies (Programs 11BF01, PI:
+    Gavazzi, and 07BF15 PI: Soucail) or from existing surveys like WIRDS
+    (Bielby et al. 2010A&A...523A..66B, 2012A&A...545A..23B) or from the
+    ongoing MIRACLES Survey that is gathering deep NIR counterparts to a
+    subset of the CFHTLS in the W1 and W4 fields (S. Arnouts et al., in
+    preparation).
+
+    In addition to ground-based photometry, 33 of the 56 lens systems
+    presented here have been observed with HST as part of programs 10876,
+    11289 (PI Kneib), and 11588 (PI Gavazzi) over the course of cycles 15,
+    16, and 17, respectively.
+
+File Summary:
+--------------------------------------------------------------------------------
+ FileName      Lrecl  Records   Explanations
+--------------------------------------------------------------------------------
+ReadMe            80        .   This file
+table4.dat        84       57   Lens light parameters, CFHT photometry
+table5.dat        64       34   Lens light parameters, HST photometry
+table6.dat        71       61   Lens model parameters
+table7.dat        68       56   Stellar mass measurements
+--------------------------------------------------------------------------------
+
+See also:
+ II/317 : The CFHTLS Survey (T0007 release) (Hudelot+ 2012)
+ J/A+A/567/A111 : Multi-color detection of gravitational arcs (Maturi+, 2014)
+ J/ApJ/755/31   : Compilation of 122 strong gravitational lenses (Cao+, 2012)
+ J/ApJ/749/65   : H-ATLAS search of strongly lensed gal. (Gonzalez-Nuevo+, 2012)
+ J/ApJ/749/38   : CFHTLS-SL2S-ARCS strong lens candidates (More+, 2012)
+ J/ApJ/705/1099 : The Sloan Lens ACS (SLACS) Survey. IX. (Auger+, 2009)
+ J/A+A/501/461  : Photometric masses of early-type lens galaxies (Grillo+, 2009)
+ J/ApJ/682/964  : Sloan lens ACS survey. V. (Bolton+, 2008)
+ J/ApJS/176/19  : COSMOS: strong lens systems (Faure+, 2008)
+
+Byte-by-byte Description of file: table4.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units    Label  Explanations
+--------------------------------------------------------------------------------
+   1-  4  A4    ---      ---    [SL2S]
+   5- 18  A14   ---      SL2S   Lens name (G1)
+  19- 20  A2    ---    m_SL2S   2d component (G1)
+  22- 25  F4.2  arcsec   Reff   [0.2/2.3] Effective radius (1)
+  27- 30  F4.2  ---      q      [0.2/1] Axis ratio of elliptical isophote (1)
+  32- 36  F5.1  deg      PA     [-87/88] Position angle; East of North (1)
+  38- 42  F5.2  mag      umag   [20.3/25.3] The CFHT u-band magnitude (1)
+  44- 48  F5.2  mag      gmag   [18.5/23.9] The CFHT g-band magnitude (1)
+  50- 54  F5.2  mag      rmag   [17.3/22.4] The CFHT r-band magnitude (1)
+  56- 60  F5.2  mag      imag   [16.8/21.2] The CFHT i-band magnitude (1)
+  62- 66  F5.2  mag      zmag   [16.5/20.8] The CFHT z-band magnitude (1)
+  68- 72  F5.2  mag      Jmag   [15.9/20]? The CFHT/WIRCam J-band magnitude (1)
+  74- 78  F5.2  mag      Hmag   [15/19.4]? The CFHT/WIRCam H-band magnitude (1)
+  80- 84  F5.2  mag      Ksmag  [15/20]? The CFHT/WIRCam K_S_-band magnitude (1)
+--------------------------------------------------------------------------------
+Note (1): Best fit parameters for de Vaucouleurs models of the surface
+          brightness profile of the lens galaxies, after careful manual masking
+          of the lensed images. The typical uncertainties are a few degrees for
+          the position angle, {Delta}q~0.03 for the axis ratio, 0.3 for u-band
+          magnitudes, 0.2 for g and r-band magnitudes, 0.1 for magnitudes in
+          the remaining bands, 30% on the effective radii.
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table5.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units    Label  Explanations
+--------------------------------------------------------------------------------
+   1-  4  A4    ---      ---    [SL2S]
+   5- 18  A14   ---      SL2S   Lens name (G1)
+  19- 20  A2    ---    m_SL2S   2d component (G1)
+  22- 25  F4.2  arcsec   Reff   [0.4/2.5] Effective radius (1)
+  27- 30  F4.2  ---      q      [0.2/1] Axis ratio of elliptical isophote (1)
+  32- 36  F5.1  deg      PA     [-80/85] Position angle;
+                                 Measured East of North (1)
+  38- 42  F5.2  mag      F814W  [19/19.2]? HST/ACS F814W filter magnitude (1)
+  44- 48  F5.2  mag      F606W  [17.6/22.8]? HST/(ACS or WFPC2) F606W filter
+                                 magnitude (1)
+  50- 54  F5.2  mag      F600LP [18.5/21]? HST/WFC3 F600LP filter magnitude (1)
+  56- 60  F5.2  mag      F475X  [20.6/23.4]? HST/WFC3 F475X filter magnitude (1)
+  62- 64  A3    ---      Set    [,a-d] Set of observations (2)
+--------------------------------------------------------------------------------
+Note (1): Best fit parameters for de Vaucouleurs models of the surface
+          brightness profile of the lens galaxies, after careful manual masking
+          of the lensed images.
+Note (2): Summary of HST observations:
+     -------------------------------------------------
+      Set   Prog    Inst    Filter          Exp. Time
+                                              (s)
+     -------------------------------------------------
+      (a)   10876   ACS     F814W, F606W     800, 400
+      (b)   11689   WFPC2   F606W           1200
+      (c)   11588   WFC3    F600LP, F475X    720
+      (d)   11588   WFC3    F475X            360
+     -------------------------------------------------
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table6.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units    Label  Explanations
+--------------------------------------------------------------------------------
+   1-  4  A4    ---      ---    [SL2S]
+   5- 18  A14   ---      SL2S   Lens name (G1)
+  19- 21  A3    ---    m_SL2S   Components (G1)
+  23- 26  F4.2  arcsec   Reff   [0.05/4.4] Einstein radius
+  28- 31  F4.2  arcsec e_Reff   [0.01/0.3] The 68% confidence interval on Reff
+  33- 36  F4.2  ---      q      [0.2/1]? Axis ratio of elliptical
+                                 isodensity contour
+  38- 41  F4.2  ---    e_q      [0.01/0.4]? The 68% confidence interval on q
+  43- 47  F5.1  deg      PA     [-84/86]? Position angle; Measured East of North
+  49- 52  F4.1  deg    e_PA     ? The 68% confidence interval on PosAng
+  54- 58  F5.2  mag      mag    [22.4/31.8]? Source magnitude (1)
+      60  A1    ---      Grade  [A-C] Lens grade (A=confirmed: 39 lenses) (2)
+  62- 69  A8    ---      Note   Lens morphology note
+      71  A1    ---      HST    Lens has HST imaging? Y=Yes, N=No
+--------------------------------------------------------------------------------
+Note (1): Of the de-lensed source in the band used for the lensing analysis:
+          the bluest available band for HST data, or g band for CFHT data. The
+          typical uncertainty on the source magnitude is ~0.5.
+Note (2): The systems are graded according to their subjective likelihood of
+          being strong lenses: grade A are definite lenses, B are probable
+          lenses, C are possible lenses or, more conservatively, systems for
+          which the additional dataset does not lead to conclusive answers
+          about their actual strong lensing nature.
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table7.dat
+--------------------------------------------------------------------------------
+  Bytes Format Units     Label      Explanations
+--------------------------------------------------------------------------------
+  1-  4  A4    ---       ---        [SL2S]
+  5- 18  A14   ---       SL2S       Lens name (G1)
+ 20- 24 F5.3   ---       z          [0.2/0.8]? Lens redshift; discussed in
+                                     Paper IV (2013ApJ...777...98S)
+ 26- 30 F5.2   [Msun]    logMC      [10.4/11.9]? Log stellar mass, Chabrier IMF
+ 32- 35 F4.2   [Msun]  e_logMC      [0.09/0.2]? Error on logMC
+ 37- 41 F5.2   [Msun]    logMS      [10.6/11.8]? Log stellar mass, Salpeter IMF
+ 43- 46 F4.2   [Msun]  e_logMS      [0.06/0.2]? Error on logMS
+ 48- 52 F5.2   [Msun]    logMC2     [10.6/12.1]? Log stellar mass,
+                                     Chabrier IMF with NIR
+ 54- 57 F4.2   [Msun]  e_logMC2     [0.09/0.2]? Error on logMC2
+ 59- 63 F5.2   [Msun]    logMS2     [10.9/12]? Log stellar mass,
+                                     Salpeter IMF with NIR
+ 65- 68 F4.2   [Msun]  e_logMS2     [0.06/0.2]? Error on logMS2
+--------------------------------------------------------------------------------
+
+Global notes:
+Note (G1): SL2S = Strong Lensing in the Legacy Survey; identification
+   is based on position (JHHMMSS+DDMMSS). 
+ * Some systems have two lens galaxies of comparable magnitude; "c2"
+   indicates this second omponent.
+ * "gEx" ({gamma}_ext_) for a very massive lense (external shear;
+    see section 4.1)
+--------------------------------------------------------------------------------
+
+History:
+    From electronic version of the journal
+
+References:
+    Gavazzi et al.      Paper I.    2012ApJ...761..170G
+    Ruff et al.         Paper II.   2011ApJ...727...96R
+    Sonnenfeld et al.   Paper IV.   2013ApJ...777...98S
+    Sonnenfeld et al.   Paper V.    2015ApJ...800...94S
+
+================================================================================
+(End)                 Greg Schwarz [AAS], Emmanuelle Perret [CDS]    08-Apr-2015
