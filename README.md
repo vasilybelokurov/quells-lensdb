@@ -59,3 +59,7 @@ be checked before quoting individual values.
 
 Non-evolving galaxy populations, spherical lenses, no magnification bias, source at
 z_s = 2, flat LCDM with H0 = 70 and Om = 0.3. See the note for caveats.
+
+## Licence
+
+Code: MIT (see `LICENSE`). Third-party data in `data/raw/` remain under their original terms; please cite the sources above.
