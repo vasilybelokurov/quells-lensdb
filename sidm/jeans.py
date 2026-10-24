@@ -17,16 +17,11 @@ import numpy as np
 from scipy.optimize import root
 
 from lenscore.cosmology import G, rho_crit
-from lenscore.profiles import concentration, mstar_moster13
+from lenscore.profiles import concentration, mstar_moster13, re_shen03
 
 CM2G = 1.989e33 / 3.0857e21**2          # 1 cm^2/g in kpc^2 / Msun
 KMS_GYR = 1.0227                        # 1 km/s x 1 Gyr in kpc
 R_IN = 1e-4                             # kpc, inner start of the integration
-
-
-def re_shen03(mstar):
-    """Early-type half-light radius [kpc], Shen et al. (2003, MNRAS 343, 978): 2.88e-6 M^0.56."""
-    return 2.88e-6 * mstar**0.56
 
 
 def halo(m200, z, mstar, re):
@@ -93,14 +88,84 @@ def branch(m200, z, mstar, re, r1s, tol=1e-6):
         rho, mm = isothermal(np.exp(p[0]), np.exp(p[1]), m_b, r1)
         return [np.log(rho[0] / rho_cdm(r1)), np.log(mm[0] / m_cdm(r1))]
 
+    def solve(r1, p):
+        sol = root(resid, p, args=(r1,), method="hybr")
+        return sol.x if sol.success and np.max(np.abs(resid(sol.x, r1))) < tol else None
+
     r1 = r1s[0]
     p = np.log([3 * rho_cdm(r1), np.sqrt(G * (m_cdm(r1) + m_b(r1)) / (2 * r1))])
     out = []
-    for r1 in r1s:
-        sol = root(resid, p, args=(r1,), method="hybr")
-        if not (sol.success and np.max(np.abs(resid(sol.x, r1))) < tol):
-            break
-        p = sol.x
-        rho0, s0 = np.exp(p)
-        out.append((r1, rho0, s0, x_of(s0, rho_cdm(r1))))
-    return np.array(out)
+    def done():
+        # keep the expansion branch only: up to the maximum of X (the fold); past it the continuation can
+        # step onto the high-density branch, where X decreases again
+        b = np.array(out)
+        return b[:np.argmax(b[:, 3]) + 1] if len(b) else b
+
+    for target in r1s:
+        # step from the last solution towards target, halving the step on failure (up to 2^-8 of the
+        # nominal step) so that only a genuine end of the branch stops the continuation
+        last = out[-1][0] if out else target
+        step, sub = np.log(target / last), 0
+        while True:
+            r1 = last * np.exp(step) if out else target
+            q = solve(r1, p)
+            if q is None:
+                if sub == 8 or not out:
+                    return done()
+                step, sub = step / 2, sub + 1
+                continue
+            p, last = q, r1
+            rho0, s0 = np.exp(p)
+            out.append((r1, rho0, s0, x_of(s0, rho_cdm(r1))))
+            if r1 >= target * (1 - 1e-12):
+                break
+            step = np.log(target / r1)
+    return done()
+
+
+def r200(m200, z):
+    """r_200c [kpc] as used in halo()."""
+    return (3 * m200 / (4 * np.pi * 200 * rho_crit(z))) ** (1 / 3)
+
+
+def solve_at_x(m200, z, mstar, re, X, b):
+    """(r1, rho0, sigma0) of the matched solution at X [cm^2 g^-1 Gyr], starting from the branch b
+    (output of branch for the same halo); None if X lies beyond the end (fold) of the branch."""
+    if X <= 0:
+        return None
+    if X > b[-1, 3]:
+        return None
+    m_cdm, rho_cdm, m_b = halo(m200, z, mstar, re)
+    rgrid = np.logspace(-4, 3.5, 4000)
+    lrho = -np.log(rho_cdm(rgrid))
+
+    def r1_of(s0):
+        target = np.sqrt(np.pi) / (4 * s0 * X * CM2G * KMS_GYR)
+        return np.exp(np.interp(-np.log(target), lrho, np.log(rgrid)))
+
+    def resid(p):
+        r1 = r1_of(np.exp(p[1]))
+        rho, mm = isothermal(np.exp(p[0]), np.exp(p[1]), m_b, r1)
+        return [np.log(rho[0] / rho_cdm(r1)), np.log(mm[0] / m_cdm(r1))]
+
+    lx = np.log(b[:, 3])
+    guess = [np.interp(np.log(X), lx, np.log(b[:, 1])), np.interp(np.log(X), lx, np.log(b[:, 2]))]
+    sol = root(resid, guess, method="hybr")
+    if not (sol.success and np.max(np.abs(resid(sol.x))) < 1e-6):
+        return None
+    rho0, s0 = np.exp(sol.x)
+    return r1_of(s0), rho0, s0
+
+
+def m3d_at_x(m200, z, mstar, re, X, b):
+    """Total enclosed mass M(<r) (SIDM dark matter + stars) as a callable of r [kpc] at X; None beyond
+    the fold. Inside r1 the isothermal solution, outside the CDM halo."""
+    s = solve_at_x(m200, z, mstar, re, X, b)
+    if s is None:
+        return None
+    r1, rho0, s0 = s
+    m_cdm, _, m_b = halo(m200, z, mstar, re)
+    r, _, m_in = isothermal(rho0, s0, m_b, r1, n=800, profile=True)
+    lr, lm = np.log(r), np.log(m_in)
+    return lambda x: (np.where(x < r1, np.exp(np.interp(np.log(np.maximum(x, R_IN)), lr, lm)), m_cdm(x))
+                      + m_b(x))

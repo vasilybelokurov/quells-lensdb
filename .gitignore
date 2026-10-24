@@ -22,3 +22,6 @@ data/raw/manga/*
 !data/raw/manga/manga_sep_hist.npy
 !data/raw/manga/manga_delay_hist.npz
 !data/raw/manga/manga_delay_hist_types.npz
+
+# SIDM forecast run log (warnings and progress only)
+data/sidm/*.log

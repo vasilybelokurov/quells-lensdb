@@ -29,7 +29,7 @@ def slacs():
         if np.isnan(re_arcsec):
             re_arcsec = _f(line, 72, 75)
         t3[name] = dict(zl=_f(line, 40, 44), zs=_f(line, 46, 50), sigma=_f(line, 52, 54),
-                        re_arcsec=re_arcsec, mtype=line[58:63].strip())
+                        re_arcsec=re_arcsec, re_v_arcsec=_f(line, 85, 88), mtype=line[58:63].strip())
     rows = []
     for line in open(RAW / "slacs" / "table4.dat"):
         name = line[4:14].strip()
@@ -39,6 +39,7 @@ def slacs():
                  fstar_salp=_f(line, 37, 40), e_fstar_salp=_f(line, 42, 45),
                  logms=_f(line, 52, 56), e_logms=_f(line, 58, 61))
         d["re_kpc"] = d["re_arcsec"] * _kpc_per_arcsec(d["zl"])
+        d["re_v_kpc"] = d["re_v_arcsec"] * _kpc_per_arcsec(d["zl"])
         rows.append(d)
     keys = rows[0].keys()
     return {k: np.array([r[k] for r in rows]) for k in keys}
