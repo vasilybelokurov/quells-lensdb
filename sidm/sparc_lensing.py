@@ -11,8 +11,11 @@ centre) so far; 0.1-0.5" and 0.5-1" bands and median delays (12.5-13.0 d) likewi
 the centres near the solid-body end: the flat-centre bracket is excluded by the rotation curves themselves.
 Rotation curves prefer SIDM for V_flat < 150 km/s (median chi2 gain 2-7 for sigma/m = 1-10), not above.
 
-    python sidm/sparc_lensing.py     -> plots/sidm_sparc.png, data/sidm/sparc_lensing.npz
+    python sidm/sparc_lensing.py                    -> plots/sidm_sparc.png, data/sidm/sparc_lensing.npz
+    python sidm/sparc_lensing.py --model collapse   -> the same for the parametric (collapse) fits of
+        sparc_collapse.py: plots/sidm_sparc_collapse.png, data/sidm/sparc_collapse_lensing.npz
 """
+import argparse
 import sys
 from pathlib import Path
 
@@ -24,8 +27,14 @@ import paths  # noqa: E402
 import sparc_lenses as S  # noqa: E402
 from lenscore.population import DT_E, SEP_BINS, SEP_E, optical_depth  # noqa: E402
 
-f = np.load(paths.ROOT / "data" / "sidm" / "sparc_sidm.npz")
-names, rows, chi2, ok, vel, sig = f["names"], f["rows"], f["chi2"], f["ok"], f["vel"], f["sigma_m"]
+ap = argparse.ArgumentParser()
+ap.add_argument("--model", choices=["jeans", "collapse"], default="jeans")
+MODEL = ap.parse_args().model
+SUFFIX = "" if MODEL == "jeans" else "_collapse"
+f = np.load(paths.ROOT / "data" / "sidm" / ("sparc_sidm.npz" if MODEL == "jeans" else "sparc_collapse.npz"))
+names, rows, chi2, vel, sig = f["names"], f["rows"], f["chi2"], f["vel"], f["sigma_m"]
+ok = f["ok"] if "ok" in f else chi2 < 1e11
+tau_fit = f["tau"] if "tau" in f else None
 w = S.weights(vel)                                       # HIPASS density per galaxy (velocity bins as before)
 brackets = {k: S.sparc_profiles(k) for k in ("solid body", "flat")}
 # the bracket rows for the same galaxies (sparc_profiles keeps the same selection and order)
@@ -65,7 +74,12 @@ for lo, hi in [(0, 80), (80, 150), (150, 400)]:
     print(f"  V_flat {lo}-{hi} km/s (N={sel.sum()}): median chi2(SIDM) - chi2(CDM) = "
           + " ".join(f"{s:g}: {np.median(dchi[sel, j]):+.1f}" for j, s in enumerate(sig) if s > 0)
           + f"; best sigma/m histogram {dict(zip(*np.unique(best[sel], return_counts=True)))}")
-np.savez(paths.ROOT / "data" / "sidm" / "sparc_lensing.npz", keys=np.array(list(out)),
+if tau_fit is not None:
+    for lo, hi in [(0, 80), (80, 150), (150, 400)]:
+        sel = (vel >= lo) & (vel < hi)
+        print(f"  V_flat {lo}-{hi}: collapsed (tau > 1) in the refit: "
+              + " ".join(f"{s:g}: {np.sum(tau_fit[sel, j] > 1)}/{sel.sum()}" for j, s in enumerate(sig) if s > 0))
+np.savez(paths.ROOT / "data" / "sidm" / f"sparc{SUFFIX}_lensing.npz", keys=np.array(list(out)),
          h=np.array([v[0] for v in out.values()]), hq=np.array([v[1] for v in out.values()]),
          h2=np.array([v[2] for v in out.values()]))
 
@@ -77,9 +91,9 @@ cols = plt.cm.viridis(np.linspace(0, 0.9, len(sig)))
 for j, (s, col) in enumerate(zip(sig, cols)):
     h = out[f"sigma/m={s:g}"][0]
     ax[0].step(c1, h / dlog, where="mid", color=col, lw=2 if s == 0 else 1.4,
-               label="CDM fit (NFW)" if s == 0 else rf"SIDM fit $\sigma/m$={s:g} cm$^2$/g")
+               label=("CDM fit (NFW)" if MODEL == "jeans" else "CDM limit (contracted)") if s == 0 else rf"SIDM fit $\sigma/m$={s:g} cm$^2$/g")
 ax[0].set(xscale="log", yscale="log", xlim=(0.08, 5), ylim=(1e-6, 1e-3), xlabel="image separation [arcsec]",
-          ylabel=r"$d\tau/d\log_{10}\Delta\theta$ (no flux cut)", title="HI-rich discs (SPARC + HIPASS), centres from fits")
+          ylabel=r"$d\tau/d\log_{10}\Delta\theta$ (no flux cut)", title=f"HI-rich discs (SPARC + HIPASS), {'Jeans' if MODEL == 'jeans' else 'parametric (collapse)'} fits")
 ax[0].legend(fontsize=7)
 dlt = np.diff(np.log10(DT_E))
 for j, (s, col) in enumerate(zip(sig, cols)):
@@ -90,10 +104,13 @@ ax[1].set(xscale="log", yscale="log", xlim=(0.1, 300), ylim=(1e-8, 1e-4), xlabel
 for j, (s, col) in enumerate(zip(sig, cols)):
     if s > 0:
         ax[2].scatter(vel[ok[:, j]], dchi[ok[:, j], j], s=8, color=col, label=rf"$\sigma/m$={s:g}")
+        if tau_fit is not None:
+            c = ok[:, j] & (tau_fit[:, j] > 1)
+            ax[2].scatter(vel[c], dchi[c, j], s=40, facecolor="none", edgecolor=col, lw=0.8)
 ax[2].axhline(0, color="k", lw=0.6)
 ax[2].set(xscale="log", yscale="symlog", xlabel=r"$V_{\rm flat}$ [km/s]",
-          ylabel=r"$\chi^2_{\rm SIDM}-\chi^2_{\rm CDM}$ (rotation curve)", title="below 0: SPARC prefers SIDM")
+          ylabel=r"$\chi^2_{\rm SIDM}-\chi^2_{\rm CDM}$ (rotation curve)", title="below 0: SPARC prefers SIDM" + ("; circled: collapsed" if tau_fit is not None else ""))
 ax[2].legend(fontsize=7)
 fig.tight_layout()
-fig.savefig(paths.PLOTS / "sidm_sparc.png", dpi=110)
-print(f"wrote {paths.PLOTS / 'sidm_sparc.png'}")
+fig.savefig(paths.PLOTS / f"sidm_sparc{SUFFIX}.png", dpi=110)
+print(f"wrote {paths.PLOTS / f'sidm_sparc{SUFFIX}.png'}")

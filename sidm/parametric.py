@@ -69,10 +69,12 @@ def dz_norm(m_h, r_cut, a, c):
 
 
 class Halo:
-    """One halo + Hernquist galaxy: progenitor fit and t_c,b for sigma/m = 1 cm^2/g."""
+    """One halo + Hernquist galaxy: progenitor fit and t_c,b for sigma/m = 1 cm^2/g. Optional: the halo
+    concentration c (default Diemer+19) and a baryon profile m_b(r) used for the contraction and as the
+    galaxy's mass (default the Hernquist profile; the Hernquist (M_*, R_e) still set t_c,b and f_in)."""
 
-    def __init__(self, m200, z, mstar, re):
-        self.c200 = float(concentration(m200, z))
+    def __init__(self, m200, z, mstar, re, c=None, m_b=None):
+        self.c200 = float(concentration(m200, z)) if c is None else float(c)
         self.r200 = (3 * m200 / (4 * np.pi * 200 * rho_crit(z))) ** (1 / 3)
         self.rs = self.r200 / self.c200
         mu = np.log1p(self.c200) - self.c200 / (1 + self.c200)
@@ -80,7 +82,7 @@ class Halo:
         self.m200, self.mstar, self.fb = m200, mstar, mstar / m200
         self.rH = re / 1.8153
         self.rhoH = mstar / (2 * np.pi * self.rH**3)
-        self.m_b = lambda r: mstar * r**2 / (r + self.rH) ** 2
+        self.m_b = m_b or (lambda r: mstar * r**2 / (r + self.rH) ** 2)
         self.m_i = lambda r: m200 * (np.log1p(r / self.rs) - (r / self.rs) / (1 + r / self.rs)) / mu
         self.a, self.c = self._fit_progenitor()
         self.rho_x0, self.r_x0 = dz_norm((1 - self.fb) * m200, self.r200, self.a, self.c)
