@@ -13,13 +13,17 @@ from colossus.halo import concentration, mass_so
 
 import lens_population as L
 import obs_lenses as O
+import paths
+from lenscore import cosmology as cosmo
+from lenscore import lensing
+from lenscore import profiles as prof
 
 COLS = {"NFW": "k", "contracted": "C3", "cored n=0.5": "C0", "cored n=1": "C9"}
 LOGM_GRID = np.linspace(10.5, 15.0, 451)
 
 
 def m200_from_mstar(logms, z):
-    lms = np.log10(L.mstar_moster13(10**LOGM_GRID, z))
+    lms = np.log10(prof.mstar_moster13(10**LOGM_GRID, z))
     return 10 ** np.interp(logms, lms, LOGM_GRID)       # monotonic over this range
 
 
@@ -32,18 +36,14 @@ def predict(s):
         for i in idx:
             z, ms = s["zl"][i], 10 ** s["logms"][i]
             m = np.array([m200_from_mstar(s["logms"][i], z)])
-            c = concentration.concentration(m * L.H, "200c", z, model="diemer19")
-            r200 = mass_so.M_to_R(m * L.H, z, "200c") / L.H
+            c = concentration.concentration(m * cosmo.H, "200c", z, model="diemer19")
+            r200 = mass_so.M_to_R(m * cosmo.H, z, "200c") / cosmo.H
             re = np.array([s["re_kpc"][i]])
             m3 = L.enclosed_profiles(m, c, r200, np.array([ms]), re, model)
-            mst = ms * L.hernquist_m(L.R3, re[0] / 1.8153)[None, :]
-            def proj(a):
-                dm = np.diff(a, axis=1)
-                dm[:, 0] += a[:, 0]                  # mass inside the first grid radius
-                return (dm @ L.PROJ.T)[0]
-            tot, st = proj(m3), proj(mst)
-            mein[i] = np.interp(s["rein_kpc"][i], L.R2, tot)
-            fst[i] = np.interp(s["rein_kpc"][i], L.R2, st) / mein[i]
+            mst = ms * prof.hernquist_m(lensing.R3, re[0] / 1.8153)[None, :]
+            tot, st = lensing.project(m3)[0], lensing.project(mst)[0]
+            mein[i] = np.interp(s["rein_kpc"][i], lensing.R2, tot)
+            fst[i] = np.interp(s["rein_kpc"][i], lensing.R2, st) / mein[i]
         out[model] = (mein, fst)
     return out
 
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     a2.legend(frameon=False, fontsize=8, ncol=2)
     a2.set_title("model lines: running medians", fontsize=10)
     fig.tight_layout()
-    fig.savefig(L.PLOTS / "halo_model_vs_slacs.png", dpi=150)
+    fig.savefig(paths.PLOTS / "halo_model_vs_slacs.png", dpi=150)
 
     print(f"{ok.sum()} SLACS lenses")
     print(f"  observed DM fraction inside R_Ein: Chabrier {np.nanmedian(1 - s['fstar_chab'][ok]):.2f}, "

@@ -27,16 +27,18 @@ Stellar masses for weighting: NSA elliptical-Petrosian masses (h = 1) -> h = 0.7
 
 Run directly for the checks: plots/manga_checks.png
 """
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
 from scipy.special import erf
 
-import lens_population as L
+import paths
+from lenscore import cosmology as cosmo
+from lenscore import lensing
+from lenscore import profiles as prof
 
-RAW = Path(__file__).resolve().parent / "data" / "raw" / "manga"
+RAW = paths.RAW / "manga"
 MGE_DIR = RAW / "mge" / "SDSSDR17_MaNGA_MGE" / "MGE"
 ARCSEC = np.pi / 180 / 3600
 RHO_CRIT0 = 2.775e11 * 0.7**2 / 1e9            # Msun / kpc^3, H0 = 70
@@ -93,18 +95,18 @@ def read_mge(plateifu, z):
 
 
 def profiles(pop, outer="am"):
-    """Enclosed total, stellar and DM mass on L.R3 (kpc) for every galaxy."""
+    """Enclosed total, stellar and DM mass on lensing.R3 (kpc) for every galaxy."""
     g, gn = pop["g"], pop["gn"]
-    r = L.R3
+    r = lensing.R3
     out_t, out_s, ltot = [], [], []
     rfine = np.logspace(-4, 4, 4000)
     if outer == "am":
         from colossus.halo import concentration, mass_so
         lm_grid = np.linspace(10, 15.5, 600)
-        lms_grid = np.log10(L.mstar_moster13(10**lm_grid, 0.05))
+        lms_grid = np.log10(prof.mstar_moster13(10**lm_grid, 0.05))
         m200 = 10 ** np.interp(pop["logms"], lms_grid, lm_grid)
-        c200 = concentration.concentration(m200 * L.H, "200c", 0.05, model="diemer19")
-        r200am = mass_so.M_to_R(m200 * L.H, 0.05, "200c") / L.H
+        c200 = concentration.concentration(m200 * cosmo.H, "200c", 0.05, model="diemer19")
+        r200am = mass_so.M_to_R(m200 * cosmo.H, 0.05, "200c") / cosmo.H
     for i in range(len(g)):
         da_pc = g["DA"][i] * 1e6
         mge = read_mge(g["plateifu"][i], g["z"][i])
@@ -127,7 +129,7 @@ def profiles(pop, outer="am"):
             mtot = ms + mdm
             mt_rmax = np.interp(rmax, r, mtot)
             rs_am = r200am[i] / c200[i]
-            nfw = lambda x: m200[i] * L.nfw_m(np.minimum(x, r200am[i]), rs_am, c200[i])
+            nfw = lambda x: m200[i] * prof.nfw_m(np.minimum(x, r200am[i]), rs_am, c200[i])
             out_t.append(np.where(r <= rmax, mtot, mt_rmax + (ms - np.interp(rmax, r, ms))
                                   + nfw(r) - nfw(rmax)))
             out_s.append(ms)
@@ -150,7 +152,7 @@ if __name__ == "__main__":
           f"16-84% {np.percentile(dl, 16):+.3f} {np.percentile(dl, 84):+.3f}  "
           f"(expected ~ 3 log(1+z) = {np.median(3 * np.log10(1 + g['z'])):+.3f})")
     re_kpc = g["Re_arcsec_MGE"] * ARCSEC * g["DA"] * 1e3
-    m_re = np.array([np.interp(x, L.R3, row) for x, row in zip(re_kpc, mt)])
+    m_re = np.array([np.interp(x, lensing.R3, row) for x, row in zip(re_kpc, mt)])
     dm_re = np.log10(m_re) - pop["gn"]["log_Mt_Re"]
     print(f"check: log M_tot(<R_e) ours - catalogue (sphere of R_e): median {np.median(dm_re):+.3f}, "
           f"16-84% {np.percentile(dm_re, 16):+.3f} {np.percentile(dm_re, 84):+.3f}")
@@ -176,8 +178,8 @@ if __name__ == "__main__":
     for sel, col, lab in [(np.ones(len(sig), bool), "k", "all"), (early, "C3", r"Sersic $n\geq2.5$")]:
         h, _ = np.histogram(np.log10(sig[sel]), sb, weights=pop["n"][sel])
         a2.step(10 ** (0.5 * (sb[1:] + sb[:-1])), h / np.diff(sb), where="mid", color=col, label=f"MaNGA, {lab}")
-    import sparc_lenses as S
     import compare_separations as CS
+    import sparc_lenses as S
     ss = np.logspace(1.4, 2.65, 100)
     a2.plot(ss, S.schechter_dlnv(ss, *CS.CHOI) * np.log(10), color="C3", ls="--", label="Choi+07 E/S0")
     a2.plot(ss, S.schechter_dlnv(ss, *CS.BERNARDI) * np.log(10), color="0.4", ls="--", label="Bernardi+10 all")
@@ -188,4 +190,4 @@ if __name__ == "__main__":
     a2.set_ylabel(r"$dn/d\log\sigma$ [Mpc$^{-3}$ dex$^{-1}$]")
     a2.legend(frameon=False, fontsize=8)
     fig.tight_layout()
-    fig.savefig(L.PLOTS / "manga_checks.png", dpi=150)
+    fig.savefig(paths.PLOTS / "manga_checks.png", dpi=150)

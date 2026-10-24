@@ -12,12 +12,14 @@ plots/separations_compare_inputs.png
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.special import gamma
 
 import compare_separations as CS
-import lens_population as L
 import obs_lenses as O
+import paths
 import sparc_lenses as S
+from lenscore import cosmology as cosmo
+from lenscore import lensing
+from lenscore.population import ZL
 
 PC2 = 1e6
 SQ2 = np.sqrt(2)
@@ -26,24 +28,22 @@ SQ2 = np.sqrt(2)
 def per_row_tau(rows, w):
     """Optical depth contributed by each row (summed over lens redshift)."""
     tau = np.zeros(len(rows))
-    dz = L.ZL[1] - L.ZL[0]
-    for zl in L.ZL:
-        scrit, dl = L.sigma_crit(zl)
-        area, _ = L.lens_properties(rows, np.full(len(rows), dl), np.full(len(rows), scrit), nbeta=1)
-        tau += w * area * L.C_KMS / L.COSMO.Hz(zl) * L.dist_mpc(zl) ** 2 * dz
+    dz = ZL[1] - ZL[0]
+    for zl in ZL:
+        scrit, dl = cosmo.sigma_crit(zl)
+        beta_r = lensing.images(rows, dl, scrit, nbeta=1)[0]
+        tau += w * np.pi * beta_r**2 * cosmo.dvdz(zl) * dz
     return tau
 
 
 def sigma_bar(rows):
-    dm = np.diff(rows, axis=1)
-    dm[:, 0] += rows[:, 0]
-    return (dm @ L.PROJ.T) / (np.pi * L.R2**2) / PC2
+    return lensing.project(rows) / (np.pi * lensing.R2**2) / PC2
 
 
 # ---------- populations ----------
 sig = np.logspace(np.log10(10), np.log10(500), 160)
 dlns = np.gradient(np.log(sig))
-sis_rows = 2 * sig[:, None] ** 2 * L.R3[None, :] / L.G
+sis_rows = 2 * sig[:, None] ** 2 * lensing.R3[None, :] / cosmo.G
 tau_choi = per_row_tau(sis_rows, S.schechter_dlnv(sig, *CS.CHOI) * dlns)
 tau_bern = per_row_tau(sis_rows, S.schechter_dlnv(sig, *CS.BERNARDI) * dlns)
 rows_sb, vel = S.sparc_profiles("solid body")
@@ -53,13 +53,13 @@ tau_sb, tau_fl = per_row_tau(rows_sb, w_sp), per_row_tau(rows_fl, w_sp)
 
 # SPARC measured radial ranges (same selection and distance rescaling as sparc_lenses)
 ranges = []
-for line in open(O.RAW / "dwarfs" / "SPARC_Lelli2016c.mrt"):
+for line in open(paths.RAW / "dwarfs" / "SPARC_Lelli2016c.mrt"):
     w = line.split()
     if len(w) < 18 or not w[17].isdigit() or not w[1].isdigit():
         continue
     if int(w[17]) > 2 or float(w[5]) < 30 or int(w[1]) == 0:
         continue
-    rc = np.loadtxt(O.RAW / "dwarfs" / "rotmod" / f"{w[0]}_rotmod.dat")
+    rc = np.loadtxt(paths.RAW / "dwarfs" / "rotmod" / f"{w[0]}_rotmod.dat")
     fac = 73.0 / 70.0 if int(w[4]) == 1 else 1.0
     ranges.append((rc[0, 0] * fac, rc[-1, 0] * fac))
 ranges = np.array(ranges)
@@ -68,9 +68,9 @@ assert len(ranges) == len(vel)
 # SLACS: sigma_SIE from the Einstein radius
 s = O.slacs()
 ok = np.isfinite(s["rein_kpc"]) & np.isfinite(s["sigma"]) & np.isfinite(s["zs"])
-dcl, dcs = L.dist_mpc(s["zl"][ok]), L.dist_mpc(s["zs"][ok])
+dcl, dcs = cosmo.dist_mpc(s["zl"][ok]), cosmo.dist_mpc(s["zs"][ok])
 theta_e = s["rein_kpc"][ok] / (dcl / (1 + s["zl"][ok]) * 1e3)
-sig_sie = L.C_KMS * np.sqrt(theta_e * dcs / (4 * np.pi * (dcs - dcl)))
+sig_sie = cosmo.C_KMS * np.sqrt(theta_e * dcs / (4 * np.pi * (dcs - dcl)))
 sig_star = s["sigma"][ok]
 
 # ---------- figure ----------
@@ -119,7 +119,7 @@ for ax in axes[0]:
     ax.legend(frameon=False, fontsize=7.5, loc="upper left")
 
 ax = axes[1, 0]
-sc = [L.sigma_crit(z)[0] / PC2 for z in np.linspace(0.3, 0.8, 26)]
+sc = [cosmo.sigma_crit(z)[0] / PC2 for z in np.linspace(0.3, 0.8, 26)]
 ax.axhspan(min(sc), max(sc), color="C1", alpha=0.3, lw=0)
 ax.text(29, max(sc) * 1.12, r"$\Sigma_{\rm crit}$ ($z_l=0.3$-$0.8$, $z_s=2$)", color="C1", fontsize=8, ha="right")
 cmap = plt.get_cmap("viridis")
@@ -127,15 +127,15 @@ norm = plt.Normalize(np.log10(50), np.log10(320))
 sb_sb, sb_fl = sigma_bar(rows_sb), sigma_bar(rows_fl)
 for i in np.argsort(vel):
     col = cmap(norm(np.log10(vel[i])))
-    meas = (L.R2 >= ranges[i, 0]) & (L.R2 <= ranges[i, 1])
-    inner = L.R2 < ranges[i, 0]
-    ax.plot(L.R2[meas], sb_sb[i, meas], color=col, lw=0.8, alpha=0.8)
-    ax.plot(L.R2[inner], sb_sb[i, inner], color=col, lw=0.5, ls=":", alpha=0.35)
-    ax.plot(L.R2[inner], sb_fl[i, inner], color=col, lw=0.5, ls="--", alpha=0.35)
+    meas = (lensing.R2 >= ranges[i, 0]) & (lensing.R2 <= ranges[i, 1])
+    inner = lensing.R2 < ranges[i, 0]
+    ax.plot(lensing.R2[meas], sb_sb[i, meas], color=col, lw=0.8, alpha=0.8)
+    ax.plot(lensing.R2[inner], sb_sb[i, inner], color=col, lw=0.5, ls=":", alpha=0.35)
+    ax.plot(lensing.R2[inner], sb_fl[i, inner], color=col, lw=0.5, ls="--", alpha=0.35)
 for vc in (100, 150, 200, 300):
-    ax.plot(L.R2, vc**2 / (2 * L.G * L.R2) / PC2, color=cmap(norm(np.log10(vc))), lw=2.6,
+    ax.plot(lensing.R2, vc**2 / (2 * cosmo.G * lensing.R2) / PC2, color=cmap(norm(np.log10(vc))), lw=2.6,
             path_effects=[pe.Stroke(linewidth=4.2, foreground="k"), pe.Normal()], zorder=5)
-    ax.text(22, vc**2 / (2 * L.G * 22) / PC2 * 1.25, f"SIS {vc}", fontsize=8, ha="right",
+    ax.text(22, vc**2 / (2 * cosmo.G * 22) / PC2 * 1.25, f"SIS {vc}", fontsize=8, ha="right",
             color="k", zorder=6)
 sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
 cb = fig.colorbar(sm, ax=ax, pad=0.01)
@@ -172,7 +172,7 @@ ax.legend(frameon=False, fontsize=7.5, loc="upper left")
 ax.set_title("(d) kinematics to lensing mass: tested only for massive lenses", fontsize=10)
 
 fig.tight_layout()
-fig.savefig(L.PLOTS / "separations_compare_inputs.png", dpi=150)
+fig.savefig(paths.PLOTS / "separations_compare_inputs.png", dpi=150)
 
 # numbers for the text
 print(f"E/S0: 90% of tau from sigma {lo:.0f}-{hi:.0f} km/s (V_c {SQ2*lo:.0f}-{SQ2*hi:.0f}); "

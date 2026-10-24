@@ -15,10 +15,12 @@ import numpy as np
 
 import compare_separations as CS
 import delays as D
-import lens_population as L
+import paths
 import sparc_lenses as S
+from lenscore import cosmology as cosmo
+from lenscore.population import DT_E, SEP_BINS, SEP_E, optical_depth
 
-RAW = L.ROOT / "data" / "raw" / "manga"
+RAW = paths.RAW / "manga"
 CACHE = RAW / "manga_delay_hist.npz"
 
 d = np.load(RAW / "manga_profiles.npz", allow_pickle=True)
@@ -31,28 +33,21 @@ GROUPS = {
     "disc": (sn < 2.5, "C2", r"MaNGA, Sersic $n<2.5$ (disc-dominated)"),
 }
 
-if CACHE.exists():
-    h2 = dict(np.load(CACHE))
-else:
-    h2 = {}
-    for k, (sel, _, _) in GROUPS.items():
-        h2[k] = D.population(rows[sel], n[sel])
-        print(f"delays computed for {k}: N = {sel.sum()}")
-    np.savez_compressed(CACHE, **h2)
+h2 = D.cached_population(CACHE, {k: (rows[sel], n[sel]) for k, (sel, _, _) in GROUPS.items()})
 
 # ---------- panel (a) ingredients (as manga_lenses.py) ----------
 H = np.load(RAW / "manga_sep_hist.npy")
 tot = H.sum(axis=0)
-c = np.sqrt(L.SEP_BINS[1:] * L.SEP_BINS[:-1])
-dlog = np.diff(np.log10(L.SEP_BINS))
+c = np.sqrt(SEP_BINS[1:] * SEP_BINS[:-1])
+dlog = np.diff(np.log10(SEP_BINS))
 etg = CS.sis_population(CS.CHOI, srange=(CS.SIG_SLACS, np.inf)) + \
     CS.sis_population(CS.CHOI, srange=(CS.SIG_COUNTS, CS.SIG_SLACS))
 srows, vel = S.sparc_profiles("solid body")
-disc_sparc = S.optical_depth(srows, S.weights(vel))
+disc_sparc = optical_depth(srows, S.weights(vel))
 known = np.array([float(r["max_sep_arcsec"]) for r in
-                  csv.DictReader(open(L.ROOT / "data" / "lensed_quasars.csv")) if r["max_sep_arcsec"]])
+                  csv.DictReader(open(paths.KNOWN)) if r["max_sep_arcsec"]])
 kd = [(float(r["max_sep_arcsec"]), float(r["max_abs_delay_d"]), r["type"])
-      for r in csv.DictReader(open(L.ROOT / "data" / "lensed_quasars.csv"))
+      for r in csv.DictReader(open(paths.KNOWN))
       if r["max_sep_arcsec"] and r["max_abs_delay_d"]]
 ks, kdt, kt = map(np.array, zip(*kd))
 
@@ -87,8 +82,8 @@ a.legend(frameon=False, fontsize=7.5, loc="upper left")
 a.set_title("(a) image separations", fontsize=10)
 
 # (b)
-sc = np.sqrt(D.SEP_E[1:] * D.SEP_E[:-1])
-dc = np.sqrt(D.DT_E[1:] * D.DT_E[:-1])
+sc = np.sqrt(SEP_E[1:] * SEP_E[:-1])
+dc = np.sqrt(DT_E[1:] * DT_E[:-1])
 for k in ("s160", "s70", "disc"):
     _, col, lab = GROUPS[k]
     h = h2[k]
@@ -98,7 +93,7 @@ for k in ("s160", "s70", "disc"):
     b.plot([], [], color=col, lw=1.6, ls="--" if k == "disc" else "-", label=lab)
 dd = np.logspace(-1.3, 1, 50)
 for qq, ls in [(0.1, "--"), (0.5, ":")]:
-    b.plot(dd, 3e3 * D.MPC_M / (2 * L.C_KMS * 1e3) * (dd * L.ARCSEC) ** 2 * (1 - qq) / (1 + qq) / D.DAY,
+    b.plot(dd, 3e3 * cosmo.MPC_M / (2 * cosmo.C_KMS * 1e3) * (dd * cosmo.ARCSEC) ** 2 * (1 - qq) / (1 + qq) / cosmo.DAY,
            color="0.4", lw=1, ls=ls, label=rf"SIS, $D_{{\Delta t}}=3$ Gpc, $q={qq}$")
 dbl = kt == "Double"
 b.scatter(ks[dbl], kdt[dbl], s=16, color="k", zorder=5, label="known doubles")
@@ -114,7 +109,7 @@ b.set_title(r"(b) separation and delay (contours 1, 10, 50% of peak; $q\geq0.1$)
 
 # (c)
 sub = (sc >= 0.1) & (sc < 1.0)
-dl_ = np.diff(np.log10(D.DT_E))
+dl_ = np.diff(np.log10(DT_E))
 allh = h2["s160"] + h2["s70"] + h2["slow"]
 cc.step(dc, allh[sub].sum(axis=0) / dl_, where="mid", color="0.55", lw=2.4, label="MaNGA, all galaxies")
 for k in ("s160", "s70", "slow", "disc"):
@@ -131,7 +126,7 @@ cc.legend(frameon=False, fontsize=7.5, loc="upper left")
 cc.set_title("(c) delays of sub-arcsecond lenses", fontsize=10)
 
 fig.tight_layout()
-fig.savefig(L.PLOTS / "manga_separations_delays.png", dpi=150)
+fig.savefig(paths.PLOTS / "manga_separations_delays.png", dpi=150)
 
 print("median delay [d] of sub-arcsecond lenses (0.1-1\"), and by range:")
 for k, (sel, _, lab) in list(GROUPS.items()) + [("all", (None, None, "all"))]:

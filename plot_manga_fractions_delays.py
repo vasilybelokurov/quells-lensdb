@@ -12,9 +12,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import delays as D
-import lens_population as L
+import paths
+from lenscore.population import DT_E, SEP_BINS, SEP_E
 
-RAW = L.ROOT / "data" / "raw" / "manga"
+RAW = paths.RAW / "manga"
 CACHE = RAW / "manga_delay_hist_types.npz"
 d = np.load(RAW / "manga_profiles.npz", allow_pickle=True)
 good = np.isfinite(d["sigma"])
@@ -47,19 +48,15 @@ def fractions(hs):
 
 
 # (a) separations, as plot_manga_fractions.py
-c = np.sqrt(L.SEP_BINS[1:] * L.SEP_BINS[:-1])
+c = np.sqrt(SEP_BINS[1:] * SEP_BINS[:-1])
 new_s = np.logspace(-1, np.log10(8), 14)
 Hc = rebin(H, c, new_s)
 fr_s = fractions([Hc[s].sum(axis=0) for _, s, _ in classes])
 
 # (b) delays of 0.1-1" lenses
-if CACHE.exists():
-    h2 = list(np.load(CACHE)["h2"])
-else:
-    h2 = [D.population(rows[s], n[s]) for _, s, _ in classes]
-    np.savez_compressed(CACHE, h2=np.array(h2))
-sc = np.sqrt(D.SEP_E[1:] * D.SEP_E[:-1])
-dc = np.sqrt(D.DT_E[1:] * D.DT_E[:-1])
+h2 = list(D.cached_population(CACHE, {f"class{i}": (rows[s], n[s]) for i, (_, s, _) in enumerate(classes)}).values())
+sc = np.sqrt(SEP_E[1:] * SEP_E[:-1])
+dc = np.sqrt(DT_E[1:] * DT_E[:-1])
 sub = (sc >= 0.1) & (sc < 1.0)
 new_t = np.logspace(-0.5, 2.5, 16)
 fr_t = fractions([rebin(h[sub].sum(axis=0), dc, new_t) for h in h2])
@@ -94,4 +91,4 @@ order = [0, 1, 2, 3, 4]            # columns: spheroids, discs, low sigma
 fig.legend([h[k] for k in order], [l[k] for k in order], frameon=False, fontsize=9.5, ncol=3,
            loc="upper center", columnspacing=1.5, handlelength=1.4)
 fig.tight_layout(rect=(0, 0, 1, 0.88))
-fig.savefig(L.PLOTS / "manga_type_fractions_delays.png", dpi=150)
+fig.savefig(paths.PLOTS / "manga_type_fractions_delays.png", dpi=150)

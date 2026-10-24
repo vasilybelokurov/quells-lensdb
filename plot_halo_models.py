@@ -11,43 +11,45 @@ from colossus.halo import concentration, mass_so
 
 import lens_population as L
 import obs_lenses as O
+import paths
+from lenscore import cosmology as cosmo
+from lenscore import lensing
+from lenscore import profiles as prof
 
 ZL = 0.6
 COLS = {"NFW": "k", "contracted": "C3", "cored n=0.5": "C0", "cored n=1": "C9"}
-SCRIT, DL = L.sigma_crit(ZL)
+SCRIT, DL = cosmo.sigma_crit(ZL)
 
 
 def halo(logm, z=ZL):
     m = np.atleast_1d(10.0**np.asarray(logm))
-    c = concentration.concentration(m * L.H, "200c", z, model="diemer19")
-    r200 = mass_so.M_to_R(m * L.H, z, "200c") / L.H
-    ms = L.mstar_moster13(m, z)
+    c = concentration.concentration(m * cosmo.H, "200c", z, model="diemer19")
+    r200 = mass_so.M_to_R(m * cosmo.H, z, "200c") / cosmo.H
+    ms = prof.mstar_moster13(m, z)
     return m, c, r200, ms, L.re_vdw14(ms, z)
 
 
 def components(m, c, r200, ms, re, model):
-    """Enclosed DM, stellar and gas mass on L.R3 for one model."""
-    r = L.R3[None, :]
-    m0 = m[:, None] * np.where(r <= r200[:, None], L.nfw_m(r, (r200 / c)[:, None], c[:, None]), 1.0)
-    mst = ms[:, None] * L.hernquist_m(r, (re / 1.8153)[:, None])
-    mgas = (L.FB * m - ms)[:, None] * m0 / m[:, None]
+    """Enclosed DM, stellar and gas mass on lensing.R3 for one model."""
+    r = lensing.R3[None, :]
+    m0 = m[:, None] * np.where(r <= r200[:, None], prof.nfw_m(r, (r200 / c)[:, None], c[:, None]), 1.0)
+    mst = ms[:, None] * prof.hernquist_m(r, (re / 1.8153)[:, None])
+    mgas = (cosmo.FB * m - ms)[:, None] * m0 / m[:, None]
     mdm = L.enclosed_profiles(m, c, r200, ms, re, model) - mst - mgas
     return mdm, mst, mgas
 
 
 def project(m3d):
-    dm = np.diff(m3d, axis=1)
-    dm[:, 0] += m3d[:, 0]
-    return dm @ L.PROJ.T
+    return lensing.project(m3d)
 
 
 def density(m3d):
-    return np.gradient(m3d, L.R3, axis=1) / (4 * np.pi * L.R3**2) / 1e9   # Msun / pc^3
+    return np.gradient(m3d, lensing.R3, axis=1) / (4 * np.pi * lensing.R3**2) / 1e9   # Msun / pc^3
 
 
 def theta_e(m2d, scrit=SCRIT):
-    kbar = m2d / (np.pi * L.R2**2 * scrit)
-    return np.array([np.interp(-1.0, -k, L.R2) for k in kbar])              # kpc
+    kbar = m2d / (np.pi * lensing.R2**2 * scrit)
+    return np.array([np.interp(-1.0, -k, lensing.R2) for k in kbar])              # kpc
 
 
 # ---------- figure 1: profiles of two haloes ----------
@@ -57,19 +59,19 @@ for row, logm in enumerate([12.0, 13.0]):
     axd, axm, axk = axes[row]
     for model, col in COLS.items():
         mdm, mst, mgas = components(m, c, r200, ms, re, model)
-        axd.loglog(L.R3, density(mdm)[0], color=col, lw=1.6, label=f"DM, {model}")
-        axm.loglog(L.R3, mdm[0], color=col, lw=1.6)
+        axd.loglog(lensing.R3, density(mdm)[0], color=col, lw=1.6, label=f"DM, {model}")
+        axm.loglog(lensing.R3, mdm[0], color=col, lw=1.6)
         tot = project(mdm + mst + mgas)
-        kbar = tot[0] / (np.pi * L.R2**2 * SCRIT)
-        axk.loglog(L.R2, kbar, color=col, lw=1.6)
+        kbar = tot[0] / (np.pi * lensing.R2**2 * SCRIT)
+        axk.loglog(lensing.R2, kbar, color=col, lw=1.6)
         te = theta_e(tot)[0]
         axk.plot(te, 1, "o", color=col, ms=6, zorder=5)
         if model == "NFW":
-            axd.loglog(L.R3, density(mst)[0], color="C1", lw=2, ls="--", label="stars")
-            axm.loglog(L.R3, mst[0], color="C1", lw=2, ls="--", label="stars")
-            axm.loglog(L.R3, mgas[0], color="0.6", lw=1, ls=":", label="diffuse gas")
-            st2 = project(mst)[0] / (np.pi * L.R2**2 * SCRIT)
-            axk.loglog(L.R2, st2, color="C1", lw=2, ls="--", label="stars only")
+            axd.loglog(lensing.R3, density(mst)[0], color="C1", lw=2, ls="--", label="stars")
+            axm.loglog(lensing.R3, mst[0], color="C1", lw=2, ls="--", label="stars")
+            axm.loglog(lensing.R3, mgas[0], color="0.6", lw=1, ls=":", label="diffuse gas")
+            st2 = project(mst)[0] / (np.pi * lensing.R2**2 * SCRIT)
+            axk.loglog(lensing.R2, st2, color="C1", lw=2, ls="--", label="stars only")
     for ax in (axd, axm, axk):
         ax.axvline(re[0], color="C1", lw=0.8, ls=":")
         ax.axvline(1.75 * re[0], color="C9", lw=0.8, ls=":")
@@ -84,8 +86,8 @@ for row, logm in enumerate([12.0, 13.0]):
     info = (f"$\\log M_{{200c}}={logm:.1f}$, $\\log M_*={np.log10(ms[0]):.2f}$\n"
             f"$R_e={re[0]:.1f}$ kpc, $c={c[0]:.1f}$")
     axd.text(0.04, 0.05, info, transform=axd.transAxes, fontsize=9)
-    sec = axk.secondary_xaxis("top", functions=(lambda r: r / DL / L.ARCSEC,
-                                                lambda t: t * DL * L.ARCSEC))
+    sec = axk.secondary_xaxis("top", functions=(lambda r: r / DL / cosmo.ARCSEC,
+                                                lambda t: t * DL * cosmo.ARCSEC))
     sec.set_xlabel("arcsec", fontsize=8)
     axk.text(0.97, 0.94, r"dots: $\theta_E$; dotted: $R_e$, $1.75R_e$",
              transform=axk.transAxes, ha="right", va="top", fontsize=8)
@@ -100,24 +102,24 @@ axes[0, 0].set_title("density", fontsize=10)
 axes[0, 1].set_title("enclosed mass (DM by model)", fontsize=10)
 axes[0, 2].set_title("mean convergence inside R", fontsize=10)
 fig.tight_layout()
-fig.savefig(L.PLOTS / "halo_model_profiles.png", dpi=150)
+fig.savefig(paths.PLOTS / "halo_model_profiles.png", dpi=150)
 
 # ---------- figure 2: scalings, with observations ----------
 def model_scalings(z, logm):
     """Median-galaxy quantities per dark-matter model at redshift z."""
     m, c, r200, ms, re = halo(logm, z)
     out = dict(m=m, c=c, ms=ms, re=re, models={})
-    scrit, dl = L.sigma_crit(z) if z > 0.05 else (np.nan, np.nan)
+    scrit, dl = cosmo.sigma_crit(z) if z > 0.05 else (np.nan, np.nan)
     for model in COLS:
         mdm, mst, mgas = components(m, c, r200, ms, re, model)
         tot3, tot2, dm2 = mdm + mst + mgas, project(mdm + mst + mgas), project(mdm)
-        at2 = lambda rad, num: np.array([np.interp(x, L.R2, a / b) for x, a, b in zip(rad, num, tot2)])
+        at2 = lambda rad, num: np.array([np.interp(x, lensing.R2, a / b) for x, a, b in zip(rad, num, tot2)])
         d = dict(fdm_re=at2(re, dm2), fdm_re2=at2(re / 2, dm2),
-                 fdm3d_re=np.array([np.interp(x, L.R3, a / b) for x, a, b in zip(re, mdm, tot3)]),
-                 rho150=np.array([np.interp(0.15, L.R3, row) for row in density(mdm)]))
+                 fdm3d_re=np.array([np.interp(x, lensing.R3, a / b) for x, a, b in zip(re, mdm, tot3)]),
+                 rho150=np.array([np.interp(0.15, lensing.R3, row) for row in density(mdm)]))
         if np.isfinite(scrit):
             te = theta_e(tot2, scrit)
-            d["sep"] = 2 * te / dl / L.ARCSEC
+            d["sep"] = 2 * te / dl / cosmo.ARCSEC
             d["fdm_te"] = at2(te, dm2)
         out["models"][model] = d
     return out
@@ -261,4 +263,4 @@ ax.set_title("massive lenses", fontsize=10)
 fig.suptitle("median galaxy in each halo; lines: model (colours as in panel d), symbols: data",
              fontsize=10)
 fig.tight_layout()
-fig.savefig(L.PLOTS / "halo_model_scalings.png", dpi=150)
+fig.savefig(paths.PLOTS / "halo_model_scalings.png", dpi=150)

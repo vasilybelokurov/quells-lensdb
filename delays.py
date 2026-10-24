@@ -13,95 +13,62 @@ Only sources whose fainter outer image has >= 10% of the brighter one's flux cou
 plots/delays.png
 """
 import csv
+import hashlib
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 import compare_separations as CS
-import lens_population as L
+import lenscore
+import paths
 import sparc_lenses as S
+from lenscore import cosmology as cosmo
+from lenscore import lensing
+from lenscore import profiles as prof
+from lenscore.cosmology import DAY, MPC_M, dt_distance_m
+from lenscore.population import DT_E, SEP_E, ZL, optical_depth
 
 QMIN, NBETA = 0.1, 24
-DAY = 86400.0
-MPC_M = 3.0857e22
-SEP_E = np.logspace(-1.3, 1.0, 47)
-DT_E = np.logspace(-1.5, 3.5, 51)
-
-
-def dt_distance_m(zl, zs=L.ZS):
-    dcl, dcs = L.dist_mpc(zl), L.dist_mpc(zs)
-    return (1 + zl) * (dcl / (1 + zl)) * (dcs / (1 + zs)) / ((dcs - dcl) / (1 + zs)) * MPC_M
-
-
-def images(rows, dl, scrit):
-    """Per row: equal-area source samples passing the flux cut -> (sep", dt-factor rad^2, q)."""
-    dm = np.diff(rows, axis=1)
-    dm[:, 0] += rows[:, 0]
-    m2d = dm @ L.PROJ.T
-    kbar = m2d / (np.pi * L.R2**2 * scrit)
-    kap = 0.5 * kbar * np.gradient(np.log(np.maximum(m2d, 1e-30)), np.log(L.R2), axis=1)
-    theta = L.R2 / dl
-    alpha = theta[None, :] * kbar
-    psi = np.concatenate([np.zeros((len(rows), 1)),
-                          np.cumsum(0.5 * (alpha[:, 1:] + alpha[:, :-1]) * np.diff(theta), axis=1)], axis=1)
-    g = theta[None, :] - alpha
-    inv_mu = (1 - kbar) * (1 - 2 * kap + kbar)
-    pb = (np.arange(NBETA) + 0.5) / NBETA
-    out = []
-    for i in range(len(rows)):
-        br = -g[i].min()
-        if br <= 0:
-            out.append(None)
-            continue
-        te = L.outermost_root(g[i], theta, np.array([0.0]))[0]
-        if np.isfinite(te):
-            br = min(br, 2 * te)
-        beta = br * np.sqrt(pb)
-        ta = L.outermost_root(g[i], theta, beta)
-        tb = L.outermost_root(g[i], theta, -beta)
-        mua = 1 / np.abs(np.interp(ta, theta, inv_mu[i]))
-        mub = 1 / np.abs(np.interp(tb, theta, inv_mu[i]))
-        q = np.minimum(mua, mub) / np.maximum(mua, mub)
-        ok = np.isfinite(ta) & np.isfinite(tb) & (q >= QMIN)
-        phia = 0.5 * (ta - beta) ** 2 - np.interp(ta, theta, psi[i])
-        phib = 0.5 * (tb + beta) ** 2 - np.interp(tb, theta, psi[i])
-        out.append((np.pi * br**2 / NBETA, ((ta + tb) / L.ARCSEC)[ok], (phib - phia)[ok], q[ok]))
-    return out
 
 
 def population(rows, w):
-    """2D optical-depth histogram in (log sep, log dt) and per-sample arrays."""
-    h2 = np.zeros((SEP_E.size - 1, DT_E.size - 1))
-    dz = L.ZL[1] - L.ZL[0]
-    for zl in L.ZL:
-        scrit, dl = L.sigma_crit(zl)
-        ddt = dt_distance_m(zl)
-        dv = L.C_KMS / L.COSMO.Hz(zl) * L.dist_mpc(zl) ** 2 * dz
-        for wi, im in zip(w, images(rows, dl, scrit)):
-            if im is None or im[1].size == 0:
-                continue
-            da, sep, dphi, q = im
-            dt = ddt / (L.C_KMS * 1e3) * dphi / DAY
-            h2 += np.histogram2d(sep, dt, [SEP_E, DT_E], weights=np.full(sep.size, wi * dv * da))[0]
-    return h2
+    """Optical depth in (separation, delay) bins, flux ratio >= QMIN."""
+    return optical_depth(rows, w, nbeta=NBETA, qmin=QMIN, bins=SEP_E, dt_bins=DT_E)
 
 
-def sis_rows(sig):
-    return 2 * sig[:, None] ** 2 * L.R3[None, :] / L.G
-
-
-def slope_rows(sig, gamma, re=2.0):
-    m_re = 2 * sig**2 * re / L.G
-    r = L.R3[None, :]
-    return np.where(r < re, m_re[:, None] * (r / re) ** (3 - gamma), m_re[:, None] * (r / re))
+def cached_population(path, groups):
+    """population() for each name -> (rows, w), stored in an npz together with a key over
+    the inputs, the settings and the lenscore source; recomputed whenever the key differs."""
+    h = hashlib.sha1()
+    for f in ("cosmology.py", "lensing.py", "population.py"):
+        h.update((Path(lenscore.__file__).parent / f).read_bytes())
+    h.update(repr((QMIN, NBETA, SEP_E.tolist(), DT_E.tolist(), ZL.tolist())).encode())
+    for k, (rows, w) in groups.items():
+        h.update(k.encode())
+        h.update(np.ascontiguousarray(rows).tobytes())
+        h.update(np.ascontiguousarray(w).tobytes())
+    key = h.hexdigest()
+    if path.exists():
+        d = np.load(path)
+        if "key" in d and str(d["key"]) == key:
+            return {k: d[k] for k in groups}
+    out = {}
+    for k, (rows, w) in groups.items():
+        out[k] = population(rows, w)
+        print(f"delays computed for {k}: N = {len(rows)}")
+    np.savez_compressed(path, key=key, **out)
+    return out
 
 
 def check_sis():
     zl, s = 0.6, 200.0
-    scrit, dl = L.sigma_crit(zl)
-    da, sep, dphi, q = images(sis_rows(np.array([s])), dl, scrit)[0]
-    dt = dt_distance_m(zl) / (L.C_KMS * 1e3) * dphi / DAY
-    expect = dt_distance_m(zl) / (2 * L.C_KMS * 1e3) * (sep * L.ARCSEC) ** 2 * (1 - q) / (1 + q) / DAY
+    scrit, dl = cosmo.sigma_crit(zl)
+    _, sep, dphi, q = lensing.images(prof.sis([s]), dl, scrit, NBETA, QMIN)
+    ok = np.isfinite(sep[0])
+    sep, dphi, q = sep[0, ok], dphi[0, ok], q[0, ok]
+    dt = dt_distance_m(zl) / (cosmo.C_KMS * 1e3) * dphi / DAY
+    expect = dt_distance_m(zl) / (2 * cosmo.C_KMS * 1e3) * (sep * cosmo.ARCSEC) ** 2 * (1 - q) / (1 + q) / DAY
     err = np.max(np.abs(dt / expect - 1))
     assert err < 0.02, err
     print(f"check: SIS delays vs (D_dt/2c) sep^2 (1-q)/(1+q): max deviation {err:.3%}; "
@@ -122,9 +89,9 @@ if __name__ == "__main__":
     sig_i = np.logspace(np.log10(CS.SIG_COUNTS), np.log10(CS.SIG_SLACS), 50)
     wgt = lambda s: S.schechter_dlnv(s, *CS.CHOI) * np.gradient(np.log(s))
     pops = {
-        "massive E/S0 (SIS)": population(sis_rows(sig_m), wgt(sig_m)),
-        "intermediate E/S0 (SIS)": population(sis_rows(sig_i), wgt(sig_i)),
-        r"intermediate E/S0 ($\gamma=1.6$)": population(slope_rows(sig_i, 1.6), wgt(sig_i)),
+        "massive E/S0 (SIS)": population(prof.sis(sig_m), wgt(sig_m)),
+        "intermediate E/S0 (SIS)": population(prof.sis(sig_i), wgt(sig_i)),
+        r"intermediate E/S0 ($\gamma=1.6$)": population(prof.power_law(sig_i, 1.6, 2.0), wgt(sig_i)),
     }
     rows, vel = S.sparc_profiles("solid body")
     pops["HI-rich discs (SPARC)"] = population(rows, S.weights(vel))
@@ -150,7 +117,7 @@ if __name__ == "__main__":
               f"<120 d {p[dc <= 120].sum() / p.sum():.2f}, 10-120 d {p[(dc > 10) & (dc <= 120)].sum() / p.sum():.2f}")
 
     known = [(float(r["max_sep_arcsec"]), float(r["max_abs_delay_d"]), r["type"])
-             for r in csv.DictReader(open(L.ROOT / "data" / "lensed_quasars.csv"))
+             for r in csv.DictReader(open(paths.KNOWN))
              if r["max_sep_arcsec"] and r["max_abs_delay_d"]]
     ks, kd, kt = map(np.array, zip(*known))
 
@@ -164,7 +131,7 @@ if __name__ == "__main__":
         a1.plot([], [], color=col, lw=1.6, label=name)
     dd = np.logspace(-1.3, 1, 50)
     for qq, ls in [(0.1, "--"), (0.5, ":")]:
-        a1.plot(dd, 3e3 * MPC_M / (2 * L.C_KMS * 1e3) * (dd * L.ARCSEC) ** 2 * (1 - qq) / (1 + qq) / DAY,
+        a1.plot(dd, 3e3 * MPC_M / (2 * cosmo.C_KMS * 1e3) * (dd * cosmo.ARCSEC) ** 2 * (1 - qq) / (1 + qq) / DAY,
                 color="0.4", lw=1, ls=ls, label=rf"SIS, $D_{{\Delta t}}=3$ Gpc, $q={qq}$")
     doubles = kt == "Double"
     a1.scatter(ks[doubles], kd[doubles], s=18, color="k", zorder=5, label="known doubles (GraL X)")
@@ -195,4 +162,4 @@ if __name__ == "__main__":
     a2.set_title("delays of sub-arcsecond lenses", fontsize=10)
     a2.legend(frameon=False, fontsize=8, loc="upper left")
     fig.tight_layout()
-    fig.savefig(L.PLOTS / "delays.png", dpi=150)
+    fig.savefig(paths.PLOTS / "delays.png", dpi=150)

@@ -12,15 +12,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import delays as D
-import lens_population as L
-import obs_lenses as O
+import paths
 import sparc_lenses as S
+from lenscore import cosmology as cosmo
+from lenscore import lensing
+from lenscore.population import optical_depth
 
 
 def sparc_mstar():
     """M_* = 0.5 L[3.6] for the templates of sparc_lenses.sparc_profiles, same order."""
     ms = []
-    for line in open(O.RAW / "dwarfs" / "SPARC_Lelli2016c.mrt"):
+    for line in open(paths.RAW / "dwarfs" / "SPARC_Lelli2016c.mrt"):
         w = line.split()
         if len(w) < 18 or not w[17].isdigit() or not w[1].isdigit():
             continue
@@ -35,17 +37,7 @@ def mbh_rv15(mstar):
 
 
 def sep_hist(rows, w, edges):
-    h = np.zeros(edges.size - 1)
-    dz = L.ZL[1] - L.ZL[0]
-    for zl in L.ZL:
-        scrit, dl = L.sigma_crit(zl)
-        dv = L.C_KMS / L.COSMO.Hz(zl) * L.dist_mpc(zl) ** 2 * dz
-        for wi, im in zip(w, D.images(rows, dl, scrit)):
-            if im is None or im[1].size == 0:
-                continue
-            da, sep, dphi, q = im
-            h += np.histogram(sep, edges, weights=np.full(sep.size, wi * dv * da))[0]
-    return h
+    return optical_depth(rows, w, nbeta=D.NBETA, qmin=D.QMIN, bins=edges)
 
 
 if __name__ == "__main__":
@@ -62,13 +54,11 @@ if __name__ == "__main__":
              "M_BH (Reines & Volonteri 2015)": rows + mbh[:, None],
              "10 x M_BH": rows + 10 * mbh[:, None]}
     zl = 0.6
-    scrit, dl = L.sigma_crit(zl)
+    scrit, dl = cosmo.sigma_crit(zl)
     hists = {}
     for name, r in cases.items():
-        ims = D.images(r, dl, scrit)
-        nlens = sum(1 for im in ims if im is not None and im[1].size > 0)
-        newly = [i for i, im in enumerate(ims) if im is not None and im[1].size > 0]
-        seps = np.concatenate([ims[i][1] for i in newly]) if newly else np.array([])
+        _, sep, _, _ = lensing.images(r, dl, scrit, D.NBETA, D.QMIN)
+        nlens = np.isfinite(sep).any(axis=1).sum()
         hists[name] = sep_hist(r, w, edges)
         c = np.sqrt(edges[1:] * edges[:-1])
         h = hists[name]
@@ -91,4 +81,4 @@ if __name__ == "__main__":
     ax.set_title("HI-rich discs (SPARC) with and without a central black hole", fontsize=10)
     ax.legend(frameon=False, fontsize=8.5, loc="upper left")
     fig.tight_layout()
-    fig.savefig(L.PLOTS / "bh_test.png", dpi=150)
+    fig.savefig(paths.PLOTS / "bh_test.png", dpi=150)

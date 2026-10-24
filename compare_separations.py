@@ -19,10 +19,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.special import gamma
 
-import lens_population as L
+import paths
 import sparc_lenses as S
+from lenscore import cosmology as cosmo
+from lenscore import profiles as prof
+from lenscore.population import SEP_BINS, optical_depth
 
-CHOI = (8.0e-3 * L.H**3, 161.0, 2.32, 2.67)
+CHOI = (8.0e-3 * cosmo.H**3, 161.0, 2.32, 2.67)
 BERNARDI = (2.099e-2, 113.78, 0.94, 1.85)
 WIDE_BINS = np.logspace(-4, 3, 141)           # overflow check
 
@@ -31,30 +34,22 @@ SIG_COUNTS = 70.0       # Choi+07 counts complete down to here
 SIG_SLACS = 160.0       # smallest SLACS sigma: SIS mass calibration tested above here
 
 
-def sis_population(params, f=1.0, bins=None, srange=(0, np.inf)):
+def sis_population(params, f=1.0, bins=SEP_BINS, srange=(0, np.inf)):
     sig = np.logspace(np.log10(10), np.log10(500), 160)
-    rows = 2 * (f * sig[:, None]) ** 2 * L.R3[None, :] / L.G
     w = S.schechter_dlnv(sig, *params) * np.gradient(np.log(sig))
     w = np.where((sig >= srange[0]) & (sig < srange[1]), w, 0.0)
-    if bins is None:
-        return S.optical_depth(rows, w)
-    keep = L.SEP_BINS
-    L.SEP_BINS = bins
-    try:
-        return S.optical_depth(rows, w)
-    finally:
-        L.SEP_BINS = keep
+    return optical_depth(prof.sis(f * sig), w, bins=bins)
 
 
 def tau_sis_analytic(params):
     phistar, sstar, a, b = params
-    return (16 * np.pi**3 / 30 * phistar * (sstar / L.C_KMS) ** 4
-            * gamma((a + 4) / b) / gamma(a / b) * L.dist_mpc(L.ZS) ** 3)
+    return (16 * np.pi**3 / 30 * phistar * (sstar / cosmo.C_KMS) ** 4
+            * gamma((a + 4) / b) / gamma(a / b) * cosmo.dist_mpc(cosmo.ZS) ** 3)
 
 
 def fractions(h):
     cdf = np.cumsum(h) / h.sum()
-    return [np.interp(np.log10(x), np.log10(L.SEP_BINS[1:]), cdf) for x in (0.5, 1, 2)]
+    return [np.interp(np.log10(x), np.log10(SEP_BINS[1:]), cdf) for x in (0.5, 1, 2)]
 
 
 if __name__ == "__main__":
@@ -64,9 +59,9 @@ if __name__ == "__main__":
     etg_hi = sis_population(CHOI, 1.05, srange=tested)
     bern = sis_population(BERNARDI)
     rows, vel = S.sparc_profiles("solid body")
-    disc = S.optical_depth(rows, S.weights(vel))
+    disc = optical_depth(rows, S.weights(vel))
     rows, vel = S.sparc_profiles("flat")
-    disc_flat = S.optical_depth(rows, S.weights(vel))
+    disc_flat = optical_depth(rows, S.weights(vel))
     etg_parts = [sis_population(CHOI, srange=r) for r in
                  [(SIG_SLACS, np.inf), (SIG_COUNTS, SIG_SLACS), (0, SIG_COUNTS)]]
     # Spread for the untested intermediate early types: inner slope gamma = 1.6 inside
@@ -75,11 +70,7 @@ if __name__ == "__main__":
     # is not shown.
     sig_i = np.logspace(np.log10(SIG_COUNTS), np.log10(SIG_SLACS), 60)
     w_i = S.schechter_dlnv(sig_i, *CHOI) * np.gradient(np.log(sig_i))
-    re_i = 2.0
-    m_re = 2 * sig_i**2 * re_i / L.G
-    r3 = L.R3[None, :]
-    rows_i = np.where(r3 < re_i, m_re[:, None] * (r3 / re_i) ** (3 - 1.6), m_re[:, None] * (r3 / re_i))
-    etg_shallow = S.optical_depth(rows_i, w_i)
+    etg_shallow = optical_depth(prof.power_law(sig_i, 1.6, 2.0), w_i)
 
     # checks
     ta = tau_sis_analytic(CHOI)
@@ -106,8 +97,8 @@ if __name__ == "__main__":
           f"(SIS {etg_parts[1].sum():.2e}, ratio {etg_shallow.sum() / etg_parts[1].sum():.2f})")
     print(f"  E/S0 sigma > {SIG_SLACS:.0f}, calibration f = 0.95 / 1.05: tau = {etg_lo.sum():.2e} / {etg_hi.sum():.2e}")
 
-    c = np.sqrt(L.SEP_BINS[1:] * L.SEP_BINS[:-1])
-    dlog = np.diff(np.log10(L.SEP_BINS))
+    c = np.sqrt(SEP_BINS[1:] * SEP_BINS[:-1])
+    dlog = np.diff(np.log10(SEP_BINS))
     fig, ax = plt.subplots(figsize=(8.5, 5.4))
     ax.fill_between(c, etg_lo / dlog, etg_hi / dlog, step="mid", color="C3", alpha=0.18, lw=0,
                     label="_nolegend_")          # caption: sigma_SIS/sigma_* = 0.95-1.05
@@ -142,7 +133,7 @@ if __name__ == "__main__":
     # so that data and the measured E/S0 model hold the same number between 2 and 6
     # arcsec, where known samples should be most complete.
     known = np.array([float(r["max_sep_arcsec"]) for r in
-                      csv.DictReader(open(L.ROOT / "data" / "lensed_quasars.csv"))
+                      csv.DictReader(open(paths.KNOWN))
                       if r["max_sep_arcsec"]])
     kb = np.arange(-1.3, 1.01, 0.1)
     kn, _ = np.histogram(np.log10(known), kb)
@@ -173,4 +164,4 @@ if __name__ == "__main__":
               f"all E/S0 (incl. untested) x scale {(etg_parts[0][sm] + etg_parts[1][sm]).sum() * scale:7.1f}, "
               f"discs x scale {disc[sm].sum() * scale:6.1f}")
     fig.tight_layout()
-    fig.savefig(L.PLOTS / "separations_compare.png", dpi=150, bbox_inches="tight")
+    fig.savefig(paths.PLOTS / "separations_compare.png", dpi=150, bbox_inches="tight")

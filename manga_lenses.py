@@ -18,25 +18,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import compare_separations as CS
-import lens_population as L
+import paths
 import sparc_lenses as S
+from lenscore.population import SEP_BINS, optical_depth
 
-RAW = L.ROOT / "data" / "raw" / "manga"
+RAW = paths.RAW / "manga"
 
 
 def per_galaxy_hist(rows, w):
     """Separation histogram for each galaxy (rows x bins), summed over lens redshift."""
-    out = np.zeros((len(rows), L.SEP_BINS.size - 1))
-    dz = L.ZL[1] - L.ZL[0]
-    for zl in L.ZL:
-        scrit, dl = L.sigma_crit(zl)
-        dv = L.C_KMS / L.COSMO.Hz(zl) * L.dist_mpc(zl) ** 2 * dz
-        area, seps = L.lens_properties(rows, np.full(len(rows), dl), np.full(len(rows), scrit))
-        for i in np.nonzero(area > 0)[0]:
-            ok = np.isfinite(seps[i])
-            out[i] += np.histogram(seps[i, ok], L.SEP_BINS,
-                                   weights=np.full(ok.sum(), w[i] * dv * area[i] / ok.sum()))[0]
-    return out
+    return optical_depth(rows, w, per_row=True)
 
 
 if __name__ == "__main__":
@@ -47,12 +38,12 @@ if __name__ == "__main__":
     H = per_galaxy_hist(rows, n)
     tot = H.sum(axis=0)
     raw = per_galaxy_hist(d["mt_raw"][good], n).sum(axis=0)
-    cc = np.sqrt(L.SEP_BINS[1:] * L.SEP_BINS[:-1])
+    cc = np.sqrt(SEP_BINS[1:] * SEP_BINS[:-1])
     print(f"outer halo: abundance-matched tau = {tot.sum():.2e}; raw gNFW extrapolation tau = {raw.sum():.2e} "
           f"(ratio {raw.sum() / tot.sum():.2f}); share beyond 4\": am {tot[cc > 4].sum() / tot.sum():.3f}, "
           f"raw {raw[cc > 4].sum() / raw.sum():.3f}")
-    c = np.sqrt(L.SEP_BINS[1:] * L.SEP_BINS[:-1])
-    dlog = np.diff(np.log10(L.SEP_BINS))
+    c = np.sqrt(SEP_BINS[1:] * SEP_BINS[:-1])
+    dlog = np.diff(np.log10(SEP_BINS))
 
     groups = {
         r"$\sigma_e>160$ km/s": sig > 160,
@@ -63,7 +54,7 @@ if __name__ == "__main__":
     }
     def fr(h):
         cdf = np.cumsum(h) / h.sum()
-        return [np.interp(np.log10(x), np.log10(L.SEP_BINS[1:]), cdf) for x in (0.5, 1, 2)]
+        return [np.interp(np.log10(x), np.log10(SEP_BINS[1:]), cdf) for x in (0.5, 1, 2)]
     print(f"MaNGA galaxies used: {len(n)}; lensing (any z): {np.sum(H.sum(axis=1) > 0)}")
     f = fr(tot)
     print(f"MaNGA total: tau = {tot.sum():.2e}; below 0.5/1/2\": {f[0]:.2f} {f[1]:.2f} {f[2]:.2f}")
@@ -84,13 +75,13 @@ if __name__ == "__main__":
     etg = CS.sis_population(CS.CHOI, srange=(CS.SIG_SLACS, np.inf))
     etg_i = CS.sis_population(CS.CHOI, srange=(CS.SIG_COUNTS, CS.SIG_SLACS))
     srows, vel = S.sparc_profiles("solid body")
-    disc = S.optical_depth(srows, S.weights(vel))
+    disc = optical_depth(srows, S.weights(vel))
     print(f"for comparison: Choi E/S0 SIS tau = {(etg + etg_i).sum():.2e} "
           f"(sigma>160 {etg.sum():.2e}); SPARC discs {disc.sum():.2e}; "
           f"MaNGA / (Choi + SPARC) = {tot.sum() / (etg + etg_i + disc).sum():.2f}")
 
     known = np.array([float(r["max_sep_arcsec"]) for r in
-                      csv.DictReader(open(L.ROOT / "data" / "lensed_quasars.csv")) if r["max_sep_arcsec"]])
+                      csv.DictReader(open(paths.KNOWN)) if r["max_sep_arcsec"]])
 
     fig, ax = plt.subplots(figsize=(8.5, 5.4))
     ax.step(c, tot / dlog, where="mid", color="k", lw=2.6, label="MaNGA DynPop, all galaxies")
@@ -118,7 +109,7 @@ if __name__ == "__main__":
     ax.plot([], [], color="0.4", lw=1.4, label="known lenses (right axis)")
     ax.legend(frameon=False, fontsize=7.5, loc="upper left")
     fig.tight_layout()
-    fig.savefig(L.PLOTS / "separations_manga.png", dpi=150)
+    fig.savefig(paths.PLOTS / "separations_manga.png", dpi=150)
     np.save(RAW / "manga_sep_hist.npy", H)
     for lo, hi in [(0.1, 0.5), (0.5, 1), (1, 2), (2, 6)]:
         s = (c >= lo) & (c < hi)

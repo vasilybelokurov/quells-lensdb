@@ -20,8 +20,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import compare_separations as CS
-import lens_population as L
+import paths
 import sparc_lenses as S
+from lenscore import profiles as prof
+from lenscore.population import SEP_BINS, optical_depth
 
 GAMMAS = [1.6, 1.8, 2.0, 2.2, 2.4]
 RES = [1.0, 2.0, 3.0]
@@ -30,68 +32,19 @@ W = S.schechter_dlnv(SIG, *CS.CHOI) * np.gradient(np.log(SIG))
 INTER = SIG < CS.SIG_SLACS
 
 
-def rows_for(gamma, re):
-    m_re = 2 * SIG**2 * re / L.G                                   # SIS mass inside R_e
-    r = L.R3[None, :]
-    inner = m_re[:, None] * (r / re) ** (3 - gamma)
-    outer = m_re[:, None] * (r / re)                               # isothermal outside
-    return np.where(r < re, inner, outer)
-
-
 QMIN = 0.1
 NBETA = 24
 
 
-def lens_q(m3d, dl, scrit):
-    """Cross-section (sr) and separations (arcsec) counting only sources whose two outer
-    images have flux ratio >= QMIN."""
-    dm = np.diff(m3d, axis=1)
-    dm[:, 0] += m3d[:, 0]
-    m2d = dm @ L.PROJ.T
-    kbar = m2d / (np.pi * L.R2**2 * scrit)
-    kap = 0.5 * kbar * np.gradient(np.log(np.maximum(m2d, 1e-30)), np.log(L.R2), axis=1)
-    theta = L.R2 / dl
-    g = theta[None, :] * (1 - kbar)
-    inv_mu = (1 - kbar) * (1 - 2 * kap + kbar)
-    pb = (np.arange(NBETA) + 0.5) / NBETA
-    area = np.zeros(len(m3d))
-    seps = np.full((len(m3d), NBETA), np.nan)
-    for i in range(len(m3d)):
-        br = -g[i].min()
-        if br <= 0:
-            continue
-        # Sources passing the flux cut lie within ~theta_E; cap the sampled region at
-        # 2 theta_E so that divergent central deflections (gamma > 2) do not push every
-        # sample to large beta. No effect for an SIS (beta_r = theta_E).
-        te = L.outermost_root(g[i], theta, np.array([0.0]))[0]
-        if np.isfinite(te):
-            br = min(br, 2 * te)
-        beta = br * np.sqrt(pb)
-        ta = L.outermost_root(g[i], theta, beta)
-        tb = L.outermost_root(g[i], theta, -beta)
-        mua = 1 / np.abs(np.interp(ta, theta, inv_mu[i]))
-        mub = 1 / np.abs(np.interp(tb, theta, inv_mu[i]))
-        ok = np.isfinite(ta) & np.isfinite(tb) & (np.minimum(mua, mub) >= QMIN * np.maximum(mua, mub))
-        area[i] = np.pi * br**2 * ok.mean()
-        seps[i, ok] = (ta[ok] + tb[ok]) / L.ARCSEC
-    return area, seps
+def rows_for(gamma, re):
+    return prof.power_law(SIG, gamma, re)
 
 
 def tau_hist(rows, w, nu=0.0):
-    hist = np.zeros(L.SEP_BINS.size - 1)
-    dz = L.ZL[1] - L.ZL[0]
-    for zl in L.ZL:
-        scrit, dl = L.sigma_crit(zl)
-        area, seps = lens_q(rows, dl, scrit)
-        wt = w * (1 + zl) ** (-nu) * area * L.C_KMS / L.COSMO.Hz(zl) * L.dist_mpc(zl) ** 2 * dz
-        for i in range(len(rows)):
-            ok = np.isfinite(seps[i])
-            if ok.any():
-                hist += np.histogram(seps[i, ok], L.SEP_BINS, weights=np.full(ok.sum(), wt[i] / ok.sum()))[0]
-    return hist
+    return optical_depth(rows, w, nbeta=NBETA, qmin=QMIN, nu=nu)
 
 
-c = np.sqrt(L.SEP_BINS[1:] * L.SEP_BINS[:-1])
+c = np.sqrt(SEP_BINS[1:] * SEP_BINS[:-1])
 band = lambda h, lo, hi: h[(c >= lo) & (c < hi)].sum()
 
 massive = tau_hist(rows_for(2.0, 2.0)[~INTER], W[~INTER])
@@ -130,7 +83,7 @@ for lo, hi in [(0.1, 0.5), (0.5, 1), (1, 2), (2, 6)]:
           f"(non-evolving {band(massive, lo, hi) / band(allw, lo, hi):.2f})")
 
 fig, (a1, a2) = plt.subplots(1, 2, figsize=(12, 4.6))
-dlog = np.diff(np.log10(L.SEP_BINS))
+dlog = np.diff(np.log10(SEP_BINS))
 cmap = plt.get_cmap("coolwarm")
 for i, g in enumerate(GAMMAS):
     a1.step(c, res[(2.0, g)] / dlog, where="mid", color=cmap(i / (len(GAMMAS) - 1)),
@@ -156,4 +109,4 @@ a2.set_ylabel(r"lenses below $0.5''$ from $\sigma=70$-$160$, relative to SIS")
 a2.set_title(r"sub-$0.5''$ abundance as a probe of central concentration", fontsize=10)
 a2.legend(frameon=False, fontsize=8)
 fig.tight_layout()
-fig.savefig(L.PLOTS / "slope_test.png", dpi=150)
+fig.savefig(paths.PLOTS / "slope_test.png", dpi=150)

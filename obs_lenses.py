@@ -4,13 +4,10 @@ SLACS: Auger et al. 2009 (ApJ 705, 1099; CDS J/ApJ/705/1099), tables 3 and 4.
 SL2S:  Sonnenfeld et al. 2013 (ApJ 777, 97; CDS J/ApJ/777/97), tables 4-7, grade A only.
 Stellar masses are for a Chabrier IMF unless stated; R_e is in kpc.
 """
-from pathlib import Path
-
 import numpy as np
 
-import lens_population as L
-
-RAW = Path(__file__).resolve().parent / "data" / "raw"
+from lenscore import cosmology as cosmo
+from paths import RAW
 
 
 def _f(line, a, b):
@@ -19,7 +16,7 @@ def _f(line, a, b):
 
 
 def _kpc_per_arcsec(z):
-    return L.dist_mpc(z) / (1 + z) * 1e3 * L.ARCSEC
+    return cosmo.dist_mpc(z) / (1 + z) * 1e3 * cosmo.ARCSEC
 
 
 def slacs():

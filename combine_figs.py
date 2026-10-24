@@ -13,8 +13,11 @@ from matplotlib.lines import Line2D
 
 import compare_separations as CS
 import delays as D
-import lens_population as L
+import paths
 import sparc_lenses as S
+from lenscore import cosmology as cosmo
+from lenscore import profiles as prof
+from lenscore.population import DT_E, SEP_BINS, SEP_E, optical_depth
 
 # ---------- separation distribution (as compare_separations.py) ----------
 massive = CS.sis_population(CS.CHOI, srange=(CS.SIG_SLACS, np.inf))
@@ -22,33 +25,33 @@ inter = CS.sis_population(CS.CHOI, srange=(CS.SIG_COUNTS, CS.SIG_SLACS))
 lo, hi = CS.sis_population(CS.CHOI, 0.95, srange=(CS.SIG_SLACS, np.inf)), \
     CS.sis_population(CS.CHOI, 1.05, srange=(CS.SIG_SLACS, np.inf))
 rows, vel = S.sparc_profiles("solid body")
-disc = S.optical_depth(rows, S.weights(vel))
+disc = optical_depth(rows, S.weights(vel))
 rows_f, _ = S.sparc_profiles("flat")
-disc_flat = S.optical_depth(rows_f, S.weights(vel))
+disc_flat = optical_depth(rows_f, S.weights(vel))
 sig_i = np.logspace(np.log10(CS.SIG_COUNTS), np.log10(CS.SIG_SLACS), 60)
 w_i = S.schechter_dlnv(sig_i, *CS.CHOI) * np.gradient(np.log(sig_i))
-inter_shallow = S.optical_depth(D.slope_rows(sig_i, 1.6), w_i)
+inter_shallow = optical_depth(prof.power_law(sig_i, 1.6, 2.0), w_i)
 known = np.array([float(r["max_sep_arcsec"]) for r in
-                  csv.DictReader(open(L.ROOT / "data" / "lensed_quasars.csv")) if r["max_sep_arcsec"]])
+                  csv.DictReader(open(paths.KNOWN)) if r["max_sep_arcsec"]])
 
 # ---------- delays (as delays.py) ----------
 sig_m = np.logspace(np.log10(CS.SIG_SLACS), np.log10(500), 60)
 sig_d = np.logspace(np.log10(CS.SIG_COUNTS), np.log10(CS.SIG_SLACS), 50)
 wgt = lambda s: S.schechter_dlnv(s, *CS.CHOI) * np.gradient(np.log(s))
-pops = {"m": D.population(D.sis_rows(sig_m), wgt(sig_m)),
-        "i": D.population(D.sis_rows(sig_d), wgt(sig_d)),
-        "i16": D.population(D.slope_rows(sig_d, 1.6), wgt(sig_d)),
+pops = {"m": D.population(prof.sis(sig_m), wgt(sig_m)),
+        "i": D.population(prof.sis(sig_d), wgt(sig_d)),
+        "i16": D.population(prof.power_law(sig_d, 1.6, 2.0), wgt(sig_d)),
         "d": D.population(rows, S.weights(vel))}
 kd = [(float(r["max_sep_arcsec"]), float(r["max_abs_delay_d"]), r["type"])
-      for r in csv.DictReader(open(L.ROOT / "data" / "lensed_quasars.csv"))
+      for r in csv.DictReader(open(paths.KNOWN))
       if r["max_sep_arcsec"] and r["max_abs_delay_d"]]
 ks, kdt, kt = map(np.array, zip(*kd))
 
 fig, (a, b, cc) = plt.subplots(1, 3, figsize=(18, 5.4))
 
 # (a)
-c = np.sqrt(L.SEP_BINS[1:] * L.SEP_BINS[:-1])
-dlog = np.diff(np.log10(L.SEP_BINS))
+c = np.sqrt(SEP_BINS[1:] * SEP_BINS[:-1])
+dlog = np.diff(np.log10(SEP_BINS))
 a.fill_between(c, lo / dlog, hi / dlog, step="mid", color="C3", alpha=0.18, lw=0)
 a.step(c, massive / dlog, where="mid", color="C3", lw=2.2)
 a.fill_between(c, disc / dlog, disc_flat / dlog, step="mid", color="C2", alpha=0.18, lw=0)
@@ -80,8 +83,8 @@ a.legend(handles=[Line2D([], [], color="C3", lw=2.2, label=r"E/S0, $\sigma>160$ 
 a.set_title("(a) image separations", fontsize=10)
 
 # (b)
-sc = np.sqrt(D.SEP_E[1:] * D.SEP_E[:-1])
-dc = np.sqrt(D.DT_E[1:] * D.DT_E[:-1])
+sc = np.sqrt(SEP_E[1:] * SEP_E[:-1])
+dc = np.sqrt(DT_E[1:] * DT_E[:-1])
 for key, col, lab in [("m", "C3", r"E/S0, $\sigma>160$ km/s"), ("i", "C1", r"E/S0, $\sigma=70$-$160$ km/s"),
                       ("d", "C2", "HI-rich discs (SPARC)")]:
     h = pops[key]
@@ -91,7 +94,7 @@ for key, col, lab in [("m", "C3", r"E/S0, $\sigma>160$ km/s"), ("i", "C1", r"E/S
     b.plot([], [], color=col, lw=1.6, label=lab)
 dd = np.logspace(-1.3, 1, 50)
 for qq, ls in [(0.1, "--"), (0.5, ":")]:
-    b.plot(dd, 3e3 * D.MPC_M / (2 * L.C_KMS * 1e3) * (dd * L.ARCSEC) ** 2 * (1 - qq) / (1 + qq) / D.DAY,
+    b.plot(dd, 3e3 * cosmo.MPC_M / (2 * cosmo.C_KMS * 1e3) * (dd * cosmo.ARCSEC) ** 2 * (1 - qq) / (1 + qq) / cosmo.DAY,
            color="0.4", lw=1, ls=ls, label=rf"SIS, $D_{{\Delta t}}=3$ Gpc, $q={qq}$")
 dbl = kt == "Double"
 b.scatter(ks[dbl], kdt[dbl], s=16, color="k", zorder=5, label="known doubles")
@@ -108,7 +111,7 @@ b.set_title(r"(b) separation and delay (contours 1, 10, 50% of peak; $q\geq0.1$)
 
 # (c)
 selc = (sc >= 0.1) & (sc < 1.0)
-dl_ = np.diff(np.log10(D.DT_E))
+dl_ = np.diff(np.log10(DT_E))
 for key, sty, lab in [("m", dict(color="C3", lw=2), r"E/S0, $\sigma>160$ km/s"),
                       ("i", dict(color="C1", lw=2), r"E/S0, $\sigma=70$-$160$ km/s (SIS)"),
                       ("i16", dict(color="C1", lw=1.4, ls="--"), r"E/S0, $\sigma=70$-$160$ km/s ($\gamma=1.6$)"),
@@ -124,4 +127,4 @@ cc.legend(frameon=False, fontsize=7.5, loc="upper left")
 cc.set_title("(c) delays of sub-arcsecond lenses", fontsize=10)
 
 fig.tight_layout()
-fig.savefig(L.PLOTS / "separations_delays_combined.png", dpi=150)
+fig.savefig(paths.PLOTS / "separations_delays_combined.png", dpi=150)

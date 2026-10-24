@@ -32,7 +32,9 @@ Every script writes PNGs to `plots/` and prints the numbers quoted in the note.
 | script | what it does |
 |---|---|
 | `build_db.py`, `plot_db.py` | per-system table of known lensed quasars (GraL X) and its figures |
-| `lens_population.py` | spherical lens code (projection, cross-section, image separations) and the NFW halo model |
+| [`lenscore`](https://github.com/vasilybelokurov/lenscore) (separate package, installed by requirements.txt) | lensing engine: cosmology, projection, cross-sections, image separations, Fermat delays, flux cut, optical-depth integral |
+| `paths.py` | repository paths |
+| `lens_population.py` | NFW halo model (Moster+13 stars, van der Wel+14 sizes, contraction and cores) |
 | `compare_separations.py` | main result: E/S0 (Choi+07 + SIS) and HI-rich discs (SPARC + HIPASS) against known lenses |
 | `plot_compare_inputs.py` | the inputs behind the main result (abundances, mass structure, SIS calibration) |
 | `sparc_lenses.py` | SPARC rotation curves as empirical disc lenses |
@@ -46,6 +48,8 @@ Every script writes PNGs to `plots/` and prints the numbers quoted in the note.
 | `obs_lenses.py` | loaders for SLACS, SL2S, Read+19 dwarfs and SPARC |
 | `bh_test.py` | effect of central black holes on disc lenses |
 | `predict_sep.py`, `plot_contributions.py`, `plot_observables.py`, `plot_halo_models.py`, `plot_obs_comparison.py` | earlier exploratory figures (SIS shapes, halo-model diagnostics) |
+| `checks/` | regression runner and comparison (`run_all.sh`, `compare_runs.py`), lenscore against an independent projection (`engine_crosscheck.py`), effect of the lens_small_separation port (`lenssep_port_compare.py`) |
+| `sidm/` | SIDM study: isothermal-Jeans haloes with baryons (`jeans.py`), solution probes, MaNGA dark-matter fractions at lensing radii, `plot_probe.py` -> `plots/sidm_probe.png` |
 
 ## Method
 

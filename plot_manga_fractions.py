@@ -9,9 +9,10 @@ plots/manga_type_fractions.png
 import matplotlib.pyplot as plt
 import numpy as np
 
-import lens_population as L
+import paths
+from lenscore.population import SEP_BINS
 
-RAW = L.ROOT / "data" / "raw" / "manga"
+RAW = paths.RAW / "manga"
 d = np.load(RAW / "manga_profiles.npz", allow_pickle=True)
 good = np.isfinite(d["sigma"])
 sig, sn = d["sigma"][good], d["sersic_n"][good]
@@ -19,7 +20,7 @@ H = np.load(RAW / "manga_sep_hist.npy")
 assert H.shape[0] == good.sum()
 
 # rebin the 60 separation bins (0.0555 dex) into ~0.15-dex bins
-edges = L.SEP_BINS
+edges = SEP_BINS
 c = np.sqrt(edges[1:] * edges[:-1])
 new = np.logspace(-1, np.log10(8), 14)
 idx = np.clip(np.digitize(c, new) - 1, -1, new.size - 2)
@@ -65,4 +66,4 @@ ax.legend([h[k] for k in order], [l[k] for k in order], frameon=False, fontsize=
 ax.text(0.99, 0.02, r"MaNGA DynPop, $z_s=2$; spheroid/disc split at Sérsic $n=2.5$",
         transform=ax.transAxes, ha="right", va="bottom", fontsize=8.5, color="white")
 fig.tight_layout()
-fig.savefig(L.PLOTS / "manga_type_fractions.png", dpi=150)
+fig.savefig(paths.PLOTS / "manga_type_fractions.png", dpi=150)
