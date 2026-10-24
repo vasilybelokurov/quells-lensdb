@@ -26,14 +26,19 @@ R_IN = 1e-4                             # kpc, inner start of the integration
 
 def halo(m200, z, mstar, re):
     """CDM halo and stars: (M_CDM(r), rho_CDM(r), M_b(r)) as callables of r [kpc]."""
-    c = float(concentration(m200, z))
+    a = re / 1.8153
+    return halo_from(m200, float(concentration(m200, z)), z, lambda r: mstar * r**2 / (r + a) ** 2, mstar)
+
+
+def halo_from(m200, c, z, m_b, mb_total):
+    """CDM halo (NFW of mass m200 and concentration c, times 1 - mb_total/m200, truncated at r200) with an
+    arbitrary baryon profile m_b(r): (M_CDM(r), rho_CDM(r), M_b(r)). Pass the result as hal= to the solvers."""
     r200 = (3 * m200 / (4 * np.pi * 200 * rho_crit(z))) ** (1 / 3)
-    rs, f, a = r200 / c, mstar / m200, re / 1.8153
+    rs, f = r200 / c, mb_total / m200
     mu = lambda x: np.log1p(x) - x / (1 + x)
     rho_s = (1 - f) * m200 / (4 * np.pi * rs**3 * mu(c))
     m_cdm = lambda r: (1 - f) * m200 * mu(np.minimum(r, r200) / rs) / mu(c)
     rho_cdm = lambda r: rho_s / ((r / rs) * (1 + r / rs) ** 2)
-    m_b = lambda r: mstar * r**2 / (r + a) ** 2
     return m_cdm, rho_cdm, m_b
 
 
@@ -79,10 +84,10 @@ def x_of(s0, rho_cdm_r1):
     return np.sqrt(np.pi) / (4 * s0 * rho_cdm_r1 * CM2G * KMS_GYR)
 
 
-def branch(m200, z, mstar, re, r1s, tol=1e-6):
+def branch(m200, z, mstar, re, r1s, tol=1e-6, hal=None):
     """Follow the matched solutions along r1s (increasing). Returns rows (r1, rho0, sigma0, X) up to
     the first r1 where the solver fails (residual > tol); see probe scripts for what that means."""
-    m_cdm, rho_cdm, m_b = halo(m200, z, mstar, re)
+    m_cdm, rho_cdm, m_b = hal or halo(m200, z, mstar, re)
 
     def resid(p, r1):
         rho, mm = isothermal(np.exp(p[0]), np.exp(p[1]), m_b, r1)
@@ -128,14 +133,14 @@ def r200(m200, z):
     return (3 * m200 / (4 * np.pi * 200 * rho_crit(z))) ** (1 / 3)
 
 
-def solve_at_x(m200, z, mstar, re, X, b):
+def solve_at_x(m200, z, mstar, re, X, b, hal=None):
     """(r1, rho0, sigma0) of the matched solution at X [cm^2 g^-1 Gyr], starting from the branch b
     (output of branch for the same halo); None if X lies beyond the end (fold) of the branch."""
     if X <= 0:
         return None
     if X > b[-1, 3]:
         return None
-    m_cdm, rho_cdm, m_b = halo(m200, z, mstar, re)
+    m_cdm, rho_cdm, m_b = hal or halo(m200, z, mstar, re)
     rgrid = np.logspace(-4, 3.5, 4000)
     lrho = -np.log(rho_cdm(rgrid))
 
@@ -157,15 +162,56 @@ def solve_at_x(m200, z, mstar, re, X, b):
     return r1_of(s0), rho0, s0
 
 
-def m3d_at_x(m200, z, mstar, re, X, b):
+def m3d_at_x(m200, z, mstar, re, X, b, hal=None):
     """Total enclosed mass M(<r) (SIDM dark matter + stars) as a callable of r [kpc] at X; None beyond
     the fold. Inside r1 the isothermal solution, outside the CDM halo."""
-    s = solve_at_x(m200, z, mstar, re, X, b)
+    s = solve_at_x(m200, z, mstar, re, X, b, hal)
     if s is None:
         return None
     r1, rho0, s0 = s
-    m_cdm, _, m_b = halo(m200, z, mstar, re)
+    m_cdm, _, m_b = hal or halo(m200, z, mstar, re)
     r, _, m_in = isothermal(rho0, s0, m_b, r1, n=800, profile=True)
     lr, lm = np.log(r), np.log(m_in)
     return lambda x: (np.where(x < r1, np.exp(np.interp(np.log(np.maximum(x, R_IN)), lr, lm)), m_cdm(x))
                       + m_b(x))
+
+
+def forward(rho0, s0, X, m_b, rmax=500.0, n=500):
+    """SIDM halo from its core parameters (Kaplinghat et al. 2016 style), without root-solving the isothermal
+    equation: integrate the isothermal profile (rho0 [Msun/kpc^3], sigma0 [km/s]) in the total potential out to
+    the radius r1 where rho_iso(r1) (sigma/m) (4/sqrt(pi)) sigma0 t = 1, then match an NFW halo (rho_s, r_s) to
+    the density and enclosed mass at r1:  M / (4 pi r^3 rho) = mu(x) (1 + x)^2 / x^2,  x = r1 / r_s.
+    Returns a callable M_DM(<r) (isothermal inside r1, NFW outside) and (r1, rho_s, r_s), or (None, None) if
+    rho0 is below the threshold density or r1 lies beyond rmax."""
+    target = np.sqrt(np.pi) / (4 * s0 * X * CM2G * KMS_GYR)
+    if rho0 <= target:
+        return None, None
+    r, rho, m = isothermal(rho0, s0, m_b, rmax, n=n, profile=True)
+    below = np.nonzero(rho < target)[0]
+    if not below.size or below[0] == 0:
+        return None, None
+    i = below[0]
+    t = np.log(rho[i - 1] / target) / np.log(rho[i - 1] / rho[i])
+    r1 = np.exp(np.log(r[i - 1]) + t * np.log(r[i] / r[i - 1]))
+    m1 = np.exp(np.log(m[i - 1]) + t * np.log(m[i] / m[i - 1]))
+    ratio = m1 / (4 * np.pi * r1**3 * target)
+    mu = lambda x: np.log1p(x) - x / (1 + x)
+    g = lambda x: mu(x) * (1 + x) ** 2 / x**2 - ratio
+    if ratio <= 0.5 + 1e-9 or g(1e3) < 0:
+        return None, None
+    lo, hi = 1e-6, 1e3
+    for _ in range(80):
+        mid = np.sqrt(lo * hi)
+        lo, hi = (mid, hi) if g(mid) < 0 else (lo, mid)
+    x = np.sqrt(lo * hi)
+    rs = r1 / x
+    rho_s = target * x * (1 + x) ** 2
+    m_nfw = lambda q: 4 * np.pi * rho_s * rs**3 * mu(q / rs)
+    off = m1 - m_nfw(r1)                                   # ~0 by construction
+    lr, lm = np.log(r[:i + 1]), np.log(m[:i + 1])
+
+    def m_dm(q):
+        q = np.asarray(q, float)
+        inner = np.exp(np.interp(np.log(np.maximum(q, R_IN)), lr, lm))
+        return np.where(q < r1, inner, m_nfw(q) + off)
+    return m_dm, (r1, rho_s, rs)
