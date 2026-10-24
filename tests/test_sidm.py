@@ -47,3 +47,21 @@ def test_beyond_fold_is_flagged():
     m200, ms, re = J.galaxy(11.8, Z, 1.5)
     b = J.branch(m200, Z, ms, re, np.geomspace(0.02, 150, 100))
     assert J.m3d_at_x(m200, Z, ms, re, 1.5 * b[-1, 3], b) is None
+
+
+def test_parametric_limits():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sidm"))
+    import parametric as P
+    # trajectories start from the progenitor; tau = 0 profile is the Dekel-Zhao fit, normalised to (1 - f_b) M200
+    assert np.allclose([P.g_rho(0.0), P.g_r(0.0), P.g_c(0.0)], [1, 1, 0], atol=1e-12)
+    m200, ms, re = J.galaxy(12.3, Z, 1.5)
+    h = P.Halo(m200, Z, ms, re)
+    r = np.array([0.5, 2.0, 10.0, 50.0])
+    assert np.allclose(h.m_dm(0.0, r), P.dz_mass(r, h.rho_x0, h.r_x0, h.a), rtol=2e-3)
+    assert abs(h.m_dm(0.0, h.r200) / ((1 - h.fb) * m200) - 1) < 2e-3
+    assert h.fit_rms < 0.06                                   # DZ describes the contracted halo to a few %
+    assert 0 < h.Ft < 0.1                                     # compact stars shorten the collapse time
+    # without stars: no contraction and F_t = 1
+    h0 = P.Halo(m200, Z, 1.0, re)
+    rf, md = h0.contracted_dm(np.array([1.0, 10.0]))
+    assert np.allclose(rf, [1.0, 10.0], rtol=1e-6) and abs(h0.Ft - 1) < 1e-6
