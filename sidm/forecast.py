@@ -16,7 +16,7 @@ slacs_sidm.py), so models are compared at equal fit to SLACS:
   param   parametric gravothermal SIDM (Yang 2024; expansion and collapse, frozen at tau = 1.1).
 Output: data/sidm/forecast.npz with (separation, delay) histograms of the optical depth per model.
 
-    python sidm/forecast.py [--quick]
+    python sidm/forecast.py [--quick] [--fixed-alpha]     (--fixed-alpha -> data/sidm/forecast_fixed.npz)
 """
 import argparse
 import sys
@@ -42,13 +42,19 @@ QMIN, NBETA, N_R1 = 0.1, 24, 100
 MAX_SLACS_FOLD = 0.1          # largest share of SLACS lenses beyond the Jeans fold for a usable alpha match
 
 
-def models():
-    """(key, kind, alpha, parameter) with SLACS-matched alphas."""
+def models(fixed_alpha=False):
+    """(key, kind, alpha, parameter) with SLACS-matched alphas; with fixed_alpha the SIDM models keep the alpha
+    of their own CDM limit (self-interactions switched on without re-fitting SLACS), for all sigma/m."""
     import slacs_valley as SV
     v = np.load(OUT / "slacs_valley_cdm.npz")
     out = [(f"cdm_nu{nu:+.2f}", "cdm", SV.valley(row, v["alphas"]), nu) for nu, row in zip(v["nus"], v["med"])]
     for name, kind0, kind in [("slacs_valley_sidm.npz", "jref", "jeans"), ("slacs_valley_param.npz", "pref", "param")]:
         s = np.load(OUT / name)
+        if fixed_alpha:
+            a0 = round(float(s["alpha_match"][s["sigma_m"] == 0][0]), 3)
+            out += [(f"{kind0}" if sm == 0 else f"{kind}_s{sm:g}", kind0 if sm == 0 else kind, a0, sm)
+                    for sm in s["sigma_m"]]
+            continue
         for sm, a, nf in zip(s["sigma_m"], s["alpha_match"], s["nfold"]):
             # the SLACS match is meaningful only if (almost) all SLACS haloes are modelled at that sigma/m
             nf_at = nf[np.argmin(np.abs(s["alphas"] - a))] if np.isfinite(a) else nf.max()
@@ -108,8 +114,10 @@ def halo_task(args):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true", help="coarse grid, for testing")
+    ap.add_argument("--fixed-alpha", action="store_true",
+                    help="SIDM at the alpha of its CDM limit (not re-matched to SLACS) -> forecast_fixed.npz")
     args = ap.parse_args()
-    mods = models()
+    mods = models(args.fixed_alpha)
     if args.quick:
         zg, lg, dz, dlog = np.array([0.4, 0.8, 1.2]), np.array([11.5, 12.0, 12.5, 13.0]), 0.6, 0.5
     else:
@@ -137,7 +145,7 @@ def main():
             if (i + 1) % 50 == 0:
                 print(f"  {i + 1}/{len(tasks)} haloes, {time.time() - t0:.0f} s", flush=True)
     OUT.mkdir(parents=True, exist_ok=True)
-    name = "forecast_quick.npz" if args.quick else "forecast.npz"
+    name = ("forecast_quick" if args.quick else "forecast") + ("_fixed" if args.fixed_alpha else "") + ".npz"
     np.savez(OUT / name, keys=np.array(keys), kinds=np.array([m[1] for m in mods]),
              alphas=np.array([m[2] for m in mods]), pars=np.array([m[3] for m in mods]),
              h2=np.array([h2[k] for k in keys]), h1=np.array([h1[k] for k in keys]),
